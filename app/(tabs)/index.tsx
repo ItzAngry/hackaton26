@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, SafeAreaView, Dimensions } from 'react-native';
+import { View, Text, SafeAreaView, Dimensions, ScrollView } from 'react-native';
 import Animated, { 
   useAnimatedStyle, 
   useSharedValue, 
@@ -9,7 +9,7 @@ import Animated, {
   withSequence
 } from 'react-native-reanimated';
 import { useGameStore } from '../../store/useGameStore';
-import TaskDrawer from '../components/TaskDrawer';
+import TaskDrawer from '../../components/TaskDrawer';
 import { useTaskStore } from '../../store/useTaskStore';
 import TaskItem from '../../components/TaskItem';
 
@@ -88,6 +88,8 @@ export default function HomeBase() {
         <Text className="text-amber-soft text-xl font-bold mb-4">Today's Duties</Text>
         <ScrollView showsVerticalScrollIndicator={false}>
           {tasks.length === 0 ? (
+
+
             <View className="items-center py-10">
               <Text className="text-forest-light text-center italic">
                 No tasks assigned. The forest is too quiet...

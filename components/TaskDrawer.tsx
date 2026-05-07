@@ -70,18 +70,22 @@ export default function TaskDrawer() {
 
               <View>
                 <Text className="text-forest-light mb-2">Category</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3">
-                  {CATEGORIES.map((cat) => (
-                    <TouchableOpacity 
-                      key={cat.id}
-                      onPress={() => setCategory(cat.id)}
-                      className={`p-3 rounded-xl border-2 flex-row items-center gap-2 ${category === cat.id ? 'bg-amber-soft border-amber-soft' : 'bg-forest-deep border-forest-mid'}`}
-                    >
-                      <cat.icon size={20} color={category === cat.id ? '#1a2f1a' : '#8fbc8f'} />
-                      <Text className={category === cat.id ? 'text-forest-dark font-bold' : 'text-forest-light'}>{cat.id}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3">
+      {CATEGORIES.map((cat) => {
+        return (
+          <TouchableOpacity 
+            key={cat.id}
+            onPress={() => setCategory(cat.id)}
+            className={`p-3 rounded-xl border-2 flex-row items-center gap-2 ${category === cat.id ? 'bg-amber-soft border-amber-soft' : 'bg-forest-deep border-forest-mid'}`}
+          >
+            <View className="flex-row items-center gap-2">
+              <cat.icon size={20} color={category === cat.id ? '#1a2f1a' : '#8fbc8f'} />
+              <Text className={category === cat.id ? 'text-forest-dark font-bold' : 'text-forest-light'}>{cat.id}</Text>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
               </View>
 
               <View>

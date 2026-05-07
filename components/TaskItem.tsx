@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Animated } from 'react-native';
-import { useTaskStore } from '../../store/useTaskStore';
-import { useGameStore } from '../../store/useGameStore';
+import { useTaskStore } from '../store/useTaskStore';
+import { useGameStore } from '../store/useGameStore';
 import AnimatedView, { useAnimatedStyle, useSharedValue, withTiming, runOnJS } from 'react-native-reanimated';
 
 export default function TaskItem({ task }: { task: any }) {

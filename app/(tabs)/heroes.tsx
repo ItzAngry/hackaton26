@@ -11,11 +11,13 @@ export default function HeroGallery() {
       className={`mb-4 p-4 rounded-2xl border-2 flex-row items-center gap-4 ${activeHeroId === item.id ? 'bg-amber-soft border-amber-soft' : 'bg-forest-deep border-forest-mid'}`}
     >
       <View className="w-16 h-16 bg-forest-dark rounded-full items-center justify-center text-3xl">
-        {item.species === 'fox' && '🦊'}
-        {item.species === 'bear' && '🐻'}
-        {item.species === 'owl' && '🦉'}
-        {item.species === 'rabbit' && '🐰'}
-        {item.species === 'wolf' && '🐺'}
+        <Text className="text-3xl">
+          {item.species === 'fox' && '🦊'}
+          {item.species === 'bear' && '🐻'}
+          {item.species === 'owl' && '🦉'}
+          {item.species === 'rabbit' && '🐰'}
+          {item.species === 'wolf' && '🐺'}
+        </Text>
       </View>
       
       <View className="flex-1">

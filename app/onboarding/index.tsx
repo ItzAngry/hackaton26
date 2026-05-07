@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useGameStore } from '../../store/useGameStore';
-import { User } from 'lucide-react-native';
+import { supabase } from '../../lib/supabase/client';
 
 export default function WhoAreYou() {
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('fox');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
   const setUsername = useGameStore((state) => state.setUsername);
 
@@ -15,6 +16,44 @@ export default function WhoAreYou() {
     { id: 'bear', label: 'Bear', icon: '🐻' },
     { id: 'owl', label: 'Owl', icon: '🦉' },
   ];
+
+  async function handleNext() {
+    if (!name) return;
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      // 1. Save to Supabase profiles
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          username: name,
+          avatar: avatar,
+        });
+
+      if (error) throw error;
+
+      // 2. Initialize Bastion tower
+      const { error: towerError } = await supabase
+        .from('tower')
+        .upsert({
+          user_id: user.id,
+          wall_durability: 100,
+        });
+
+      if (towerError) throw towerError;
+
+      // Update local store
+      setUsername(name);
+      router.push('/onboarding/struggles');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-forest-dark p-6 justify-center">
@@ -46,14 +85,13 @@ export default function WhoAreYou() {
         </View>
 
         <TouchableOpacity 
-          disabled={!name}
-          onPress={() => {
-            setUsername(name);
-            router.push('/onboarding/struggles');
-          }}
-          className={`w-full py-4 rounded-2xl items-center ${name ? 'bg-amber-soft' : 'bg-forest-mid opacity-50'}`}
+          disabled={!name || loading}
+          onPress={handleNext}
+          className={`w-full py-4 rounded-2xl items-center ${name && !loading ? 'bg-amber-soft' : 'bg-forest-mid opacity-50'}`}
         >
-          <Text className="text-forest-dark font-bold text-xl">Next</Text>
+          <Text className="text-forest-dark font-bold text-xl">
+            {loading ? 'Saving...' : 'Next'}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
