@@ -1,13 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import {
-  SLIME_DISPLAY_SIZE,
-  SLIME_SHEET_H,
-  SLIME_SHEET_W,
-  SLIME_WALK_FRAMES,
-  SLIME_WALK_SHEETS,
-} from '@/constants/enemySlimeSprite';
+import { SLIME_DISPLAY_SIZE, SLIME_SHEET_H, SLIME_SHEET_W, SLIME_WALK_FRAMES, SLIME_WALK_SHEETS } from '@/constants/enemySlimeSprite';
 import { IosUi } from '@/constants/iosUi';
 
 import { HeroSprite } from '@/components/hero-sprite';
@@ -15,7 +9,7 @@ import { AppText } from '@/components/ui/app-text';
 
 import { slimeFacingFromPathProgress } from '@/lib/enemyWalkFacing';
 import type { MapPlayLayout } from '@/lib/mapPlayMetrics';
-import { pathProgressToLayoutPx } from '@/lib/tileMap';
+import { pathProgressToLayoutPx, slimeDisplayPx } from '@/lib/tileMap';
 import type { Enemy } from '@/store/useGameStore';
 
 type Props = {
@@ -25,6 +19,9 @@ type Props = {
 
 export function BattlefieldRoadMap({ enemies, mapPlay }: Props) {
   if (mapPlay.viewW < 8 || mapPlay.viewH < 8) return null;
+
+  const slimePx = slimeDisplayPx(mapPlay);
+  const offsetY = Math.round(10 + (slimePx - SLIME_DISPLAY_SIZE) * 0.12);
 
   return (
     <View style={styles.wrap} pointerEvents="box-none">
@@ -39,14 +36,14 @@ export function BattlefieldRoadMap({ enemies, mapPlay }: Props) {
           <View
             key={e.id}
             pointerEvents="none"
-            style={[styles.enemyToken, { left: x - SLIME_DISPLAY_SIZE / 2, top: y - SLIME_DISPLAY_SIZE / 2 - 10 }]}>
+            style={[styles.enemyToken, { left: x - slimePx / 2, top: y - slimePx / 2 - offsetY, width: slimePx + 12 }]}>
             <HeroSprite
               key={`${e.id}-${facing}`}
               sheet={sheet}
               sheetW={SLIME_SHEET_W}
               sheetH={SLIME_SHEET_H}
               frames={SLIME_WALK_FRAMES}
-              size={SLIME_DISPLAY_SIZE}
+              size={slimePx}
               running
             />
             <View style={styles.enemyHpBar}>
@@ -69,7 +66,6 @@ const styles = StyleSheet.create({
   },
   enemyToken: {
     position: 'absolute',
-    width: SLIME_DISPLAY_SIZE + 12,
     alignItems: 'center',
     gap: 2,
   },

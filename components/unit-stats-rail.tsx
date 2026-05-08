@@ -1,9 +1,10 @@
 import React from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { IosUi } from '@/constants/iosUi';
 
 import { HERO_BY_ID, getHeroIdForUnit } from '@/constants/heroDefinitions';
+import { unitStatsHeroSpritePx } from '@/lib/heroUiScale';
 
 import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
@@ -39,6 +40,8 @@ type Props = {
 };
 
 export function UnitStatsRail({ unit, onClose, floatingOverlay }: Props) {
+  const { width: windowW } = useWindowDimensions();
+  const heroSpritePx = unitStatsHeroSpritePx(windowW);
   const gold = useGameStore((s) => s.gold);
   const boostInventory = useGameStore((s) => s.boostInventory);
   const buyBoost = useGameStore((s) => s.buyBoost);
@@ -83,7 +86,7 @@ export function UnitStatsRail({ unit, onClose, floatingOverlay }: Props) {
                 sheetW={def.sheetW}
                 sheetH={def.sheetH}
                 frames={def.frames}
-                size={44}
+                size={heroSpritePx}
               />
             ) : null;
           })()}

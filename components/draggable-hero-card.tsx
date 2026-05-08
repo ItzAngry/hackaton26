@@ -1,10 +1,11 @@
 import React, { useCallback } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { HERO_BY_ID, type HeroDefinition } from '@/constants/heroDefinitions';
 import { IosUi } from '@/constants/iosUi';
+import { heroCardSpritePx } from '@/lib/heroUiScale';
 
 import { AppText } from '@/components/ui/app-text';
 import { HeroSprite, IdleHeroBob } from '@/components/hero-sprite';
@@ -72,7 +73,8 @@ export function HeroCardFace({
   compact?: boolean;
   placeCostHint?: string;
 }) {
-  const spriteSize = compact ? 44 : 56;
+  const { width: windowW } = useWindowDimensions();
+  const spriteSize = heroCardSpritePx(!!compact, windowW);
   return (
     <View style={styles.faceInner}>
       <IdleHeroBob>

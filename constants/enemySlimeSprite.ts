@@ -7,7 +7,8 @@ export const SLIME_SHEET_H = 64;
 export const SLIME_FRAME_COUNT = 8;
 export const SLIME_FRAME_MS = 100;
 
-export const SLIME_DISPLAY_SIZE = 56;
+/** On-map enemy slime sprite (LibreSprite strip scales to this square). Min size; actual token scales up on large map views. */
+export const SLIME_DISPLAY_SIZE = 80;
 
 export function slimeWalkFrames(): HeroFrame[] {
   return Array.from({ length: SLIME_FRAME_COUNT }, (_, i) => ({

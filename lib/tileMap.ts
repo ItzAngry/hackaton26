@@ -1,4 +1,6 @@
-import { TILE_COLS, TILE_ROWS } from '@/constants/mapTileGrid';
+import { SLIME_DISPLAY_SIZE } from '@/constants/enemySlimeSprite';
+import { BattleTheme } from '@/constants/battleTheme';
+import { GRID_COLS, GRID_ROWS, TILE_COLS, TILE_ROWS } from '@/constants/mapTileGrid';
 import { interpolateAlongPolylinePx, nearestPathProgressFromCellCenter } from '@/lib/mapGeometry';
 import { fullBleedMapPlayLayout, type MapPlayLayout } from '@/lib/mapPlayMetrics';
 
@@ -17,6 +19,24 @@ export function tileCenterLayoutPx(c: number, r: number, layout: MapPlayLayout):
     x: layout.originX + nx * layout.playW,
     y: layout.originY + ny * layout.playH,
   };
+}
+
+/** Defender chip size on the map; grows with cell size on large views (desktop), stays at least grassPadMinSize on phones. */
+export function defenderPadPx(layout: MapPlayLayout): number {
+  const cellW = layout.playW / GRID_COLS;
+  const cellH = layout.playH / GRID_ROWS;
+  const minCell = Math.min(cellW, cellH);
+  const scaled = Math.min(Math.round(minCell * 1.38), Math.floor(minCell * 0.97));
+  return Math.max(BattleTheme.grassPadMinSize, scaled);
+}
+
+/** Slime token pixel size; grows with tactical cell on large views (same idea as defender chips). */
+export function slimeDisplayPx(layout: MapPlayLayout): number {
+  const cellW = layout.playW / GRID_COLS;
+  const cellH = layout.playH / GRID_ROWS;
+  const minCell = Math.min(cellW, cellH);
+  const scaled = Math.min(Math.round(minCell * 1.32), Math.floor(minCell * 0.86));
+  return Math.max(SLIME_DISPLAY_SIZE, scaled);
 }
 
 export function pickTileFromLocalPx(

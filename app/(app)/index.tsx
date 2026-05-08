@@ -14,15 +14,16 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BATTLEFIELD_MAP_ASPECT } from '@/constants/battlefieldAssets';
+import { BattleTheme } from '@/constants/battleTheme';
 import { cellKey } from '@/constants/mapTileGrid';
 import { HERO_BY_ID, getHeroIdForUnit } from '@/constants/heroDefinitions';
-import { BattleTheme } from '@/constants/battleTheme';
 import { IosUi } from '@/constants/iosUi';
 
 import { isBerlinEveningHour } from '@/lib/europeTime';
 import { computeMapPlayLayout } from '@/lib/mapPlayMetrics';
 import { resolveLocalMapCoordsAsync } from '@/lib/mapPointerCoords';
-import { tileCenterLayoutPx, tryTilePlacementTap } from '@/lib/tileMap';
+import { benchRosterSpritePx } from '@/lib/heroUiScale';
+import { defenderPadPx, tileCenterLayoutPx, tryTilePlacementTap } from '@/lib/tileMap';
 import { useOnboardingGate } from '@/lib/useOnboardingGate';
 
 import { AttackRangeOverlay } from '@/components/attack-range-overlay';
@@ -43,8 +44,6 @@ import { SecondaryButton } from '@/components/ui/secondary-button';
 
 import { PLACE_DEFENDER_ENERGY_COST, benchPlacementWaivesEnergy, useGameStore } from '@/store/useGameStore';
 import { useMapLayoutStore } from '@/store/useMapLayoutStore';
-
-const PAD = BattleTheme.grassPadMinSize;
 
 export default function BattleScreen() {
   const gate = useOnboardingGate();
@@ -116,6 +115,13 @@ function BattleScreenInner() {
         : null,
     [mapLayout]
   );
+
+  const defenderPad = useMemo(
+    () => (mapPlay ? defenderPadPx(mapPlay) : BattleTheme.grassPadMinSize),
+    [mapPlay]
+  );
+
+  const rosterSpriteSize = benchRosterSpritePx(windowW);
 
   useEffect(() => {
     if (mapPlay) {
@@ -333,15 +339,15 @@ function BattleScreenInner() {
                         {placedOnField.map((u) => {
                           const tile = u.placedTile!;
                           const { x: tcx, y: tcy } = tileCenterLayoutPx(tile.c, tile.r, mapPlay);
-                          const cx = tcx - PAD / 2;
-                          const cy = tcy - PAD / 2;
+                          const cx = tcx - defenderPad / 2;
+                          const cy = tcy - defenderPad / 2;
                           const selHere = statsOverlayVisible && selectedFieldUnit?.id === u.id;
                           return (
                             <DraggablePlacedUnitChip
                               key={u.id}
                               cx={cx}
                               cy={cy}
-                              pad={PAD}
+                              pad={defenderPad}
                               mapPlay={mapPlay}
                               unitId={u.id}
                               selected={selHere}
@@ -359,7 +365,7 @@ function BattleScreenInner() {
                                       sheetW={def.sheetW}
                                       sheetH={def.sheetH}
                                       frames={def.frames}
-                                      size={Math.round(PAD * 0.92)}
+                                      size={Math.round(defenderPad * 0.92)}
                                     />
                                   ) : null;
                                 })()}
@@ -459,7 +465,7 @@ function BattleScreenInner() {
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                style={styles.rosterScrollHost}
+                style={[styles.rosterScrollHost, { maxHeight: Math.max(52, rosterSpriteSize + 18) }]}
                 contentContainerStyle={styles.rosterScroll}>
                 {unplaced.map((u) => {
                   const sel = selectedPlaceId === u.id;
@@ -479,7 +485,7 @@ function BattleScreenInner() {
                             sheetW={def.sheetW}
                             sheetH={def.sheetH}
                             frames={def.frames}
-                            size={36}
+                            size={rosterSpriteSize}
                           />
                         ) : null;
                       })()}
