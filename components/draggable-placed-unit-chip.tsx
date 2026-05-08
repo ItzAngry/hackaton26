@@ -87,7 +87,7 @@ export function DraggablePlacedUnitChip({
       });
 
     return Gesture.Exclusive(tap, pan);
-  }, [tapOnly, finishMove]);
+  }, [tapOnly, finishMove, tx, ty]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value }, { translateY: ty.value }],

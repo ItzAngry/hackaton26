@@ -25,8 +25,7 @@ export default function OnboardingIntro() {
           Defend your fortress
         </AppText>
         <AppText variant="body" color="secondary" style={styles.description}>
-          Use preparation time to place defenders on the lane, finish Today's plan tasks for bonus gold, and equip boosts.
-          When you're ready, one timed evening defense carries the streak — this build focuses on the loop and layout.
+          {`Use preparation time to place defenders on the lane, finish Today's plan tasks for bonus gold, and equip boosts. When you're ready, one timed evening defense carries the streak — this build focuses on the loop and layout.`}
         </AppText>
 
         <PrimaryButton

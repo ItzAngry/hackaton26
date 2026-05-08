@@ -141,7 +141,6 @@ export function QuestBookDock({
         styles.root,
         Platform.OS === 'web' &&
           ({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-native-web supports fixed overlays
             position: 'fixed' as any,
             top: 0,
             left: 0,

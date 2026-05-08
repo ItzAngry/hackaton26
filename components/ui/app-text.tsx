@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, type TextProps } from 'react-native';
 
+import { AppFonts } from '@/constants/appFonts';
 import { IosUi } from '@/constants/iosUi';
 
 type Variant =
@@ -20,17 +21,72 @@ type Props = TextProps & {
   color?: 'primary' | 'secondary' | 'tertiary' | 'tint';
 };
 
+/** Press Start 2P is dense — sizes are stepped down vs SF defaults. */
 const variantStyles = StyleSheet.create({
-  largeTitle: { fontSize: 34, fontWeight: '700', lineHeight: 41 },
-  title1: { fontSize: 28, fontWeight: '700', lineHeight: 34 },
-  title2: { fontSize: 22, fontWeight: '700', lineHeight: 28 },
-  title3: { fontSize: 20, fontWeight: '600', lineHeight: 25 },
-  headline: { fontSize: 17, fontWeight: '600', lineHeight: 22 },
-  body: { fontSize: 17, fontWeight: '400', lineHeight: 22 },
-  callout: { fontSize: 16, fontWeight: '400', lineHeight: 21 },
-  subhead: { fontSize: 15, fontWeight: '400', lineHeight: 20 },
-  footnote: { fontSize: 13, fontWeight: '400', lineHeight: 18 },
-  caption1: { fontSize: 12, fontWeight: '400', lineHeight: 16 },
+  largeTitle: {
+    fontFamily: AppFonts.pixelDisplay,
+    fontSize: 26,
+    fontWeight: '400',
+    lineHeight: 34,
+    letterSpacing: 0.5,
+  },
+  title1: {
+    fontFamily: AppFonts.pixelDisplay,
+    fontSize: 22,
+    fontWeight: '400',
+    lineHeight: 28,
+    letterSpacing: 0.5,
+  },
+  title2: {
+    fontFamily: AppFonts.pixelDisplay,
+    fontSize: 18,
+    fontWeight: '400',
+    lineHeight: 24,
+    letterSpacing: 0.5,
+  },
+  title3: {
+    fontFamily: AppFonts.pixelDisplay,
+    fontSize: 15,
+    fontWeight: '400',
+    lineHeight: 20,
+    letterSpacing: 0.5,
+  },
+  headline: {
+    fontFamily: AppFonts.pixelBody,
+    fontSize: 19,
+    fontWeight: '400',
+    lineHeight: 22,
+  },
+  body: {
+    fontFamily: AppFonts.pixelBody,
+    fontSize: 18,
+    fontWeight: '400',
+    lineHeight: 22,
+  },
+  callout: {
+    fontFamily: AppFonts.pixelBody,
+    fontSize: 17,
+    fontWeight: '400',
+    lineHeight: 21,
+  },
+  subhead: {
+    fontFamily: AppFonts.pixelBody,
+    fontSize: 16,
+    fontWeight: '400',
+    lineHeight: 20,
+  },
+  footnote: {
+    fontFamily: AppFonts.pixelBody,
+    fontSize: 15,
+    fontWeight: '400',
+    lineHeight: 19,
+  },
+  caption1: {
+    fontFamily: AppFonts.pixelBody,
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 17,
+  },
 });
 
 export function AppText({ variant = 'body', color = 'primary', style, ...rest }: Props) {

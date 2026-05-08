@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Audio } from 'expo-av';
 
 /** Bundled looping ambience (`assets/Course_Select_By_Zane_Little.mp3`). */

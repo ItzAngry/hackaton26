@@ -1,16 +1,16 @@
 /** Programmatic TD battlefield palette (grass + dirt road). */
 
 export const BattleTheme = {
-  grassField: '#A5D6A7',
-  grassFieldDeep: '#8BC48A',
-  grassPad: '#C8E6C9',
-  grassPadBorder: 'rgba(27, 94, 32, 0.35)',
-  grassLabel: '#1B5E20',
+  grassField: '#94C794',
+  grassFieldDeep: '#6FA96E',
+  grassPad: '#BEE3BF',
+  grassPadBorder: 'rgba(27, 94, 32, 0.38)',
+  grassLabel: '#143818',
 
-  roadBase: '#6D4C41',
-  roadEdge: '#4E342E',
-  roadLaneSurface: '#5D4037',
-  roadCenterStripe: '#A1887F',
+  roadBase: '#5D463A',
+  roadEdge: '#3E2E26',
+  roadLaneSurface: '#4A382F',
+  roadCenterStripe: '#9A8274',
 
   roadMinHeight: 102,
   roadRadius: 14,

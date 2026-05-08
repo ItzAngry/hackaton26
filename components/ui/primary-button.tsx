@@ -40,7 +40,7 @@ export function PrimaryButton({ title, disabled, style, ...rest }: Props) {
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: IosUi.systemBlue,
+    backgroundColor: IosUi.primaryFill,
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: IosRadius.button,

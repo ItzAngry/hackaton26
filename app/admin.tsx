@@ -493,7 +493,7 @@ export default function AdminMapScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: IosUi.secondarySystemGroupedBackground,
   },
   scroll: {
     padding: 20,

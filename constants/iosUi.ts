@@ -1,18 +1,21 @@
-/** iOS-style semantic colors for light mode (Human Interface Guidelines–aligned). */
+/** Enchanted / parchment UI palette + shared radii (light mode). */
 
 export const IosUi = {
-  systemBackground: '#FFFFFF',
-  secondarySystemGroupedBackground: '#F2F2F7',
-  tertiarySystemGroupedBackground: '#FFFFFF',
-  separator: 'rgba(60, 60, 67, 0.29)',
-  opaqueSeparator: '#C6C6C8',
-  label: '#000000',
-  secondaryLabel: 'rgba(60, 60, 67, 0.6)',
-  tertiaryLabel: 'rgba(60, 60, 67, 0.3)',
-  systemBlue: '#007AFF',
-  systemGray5: '#E5E5EA',
-  systemGray6: '#F2F2F7',
-  destructive: '#FF3B30',
+  systemBackground: '#F7F0E4',
+  secondarySystemGroupedBackground: '#E8DECF',
+  tertiarySystemGroupedBackground: '#F7F0E4',
+  separator: 'rgba(60, 42, 28, 0.22)',
+  opaqueSeparator: '#C4B6A3',
+  label: '#2A1F30',
+  secondaryLabel: 'rgba(42, 31, 48, 0.72)',
+  tertiaryLabel: 'rgba(42, 31, 48, 0.42)',
+  /** Links, secondary actions, HUD tint */
+  systemBlue: '#7B52AB',
+  /** Filled primary buttons (readable white text) */
+  primaryFill: '#4F3D6E',
+  systemGray5: '#D9CFC0',
+  systemGray6: '#E8DECF',
+  destructive: '#A52C2C',
 } as const;
 
 export const IosRadius = {
@@ -24,9 +27,9 @@ export const IosRadius = {
 
 export const IosShadow = {
   card: {
-    shadowColor: '#000',
+    shadowColor: '#1a0f14',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 2,
   },

@@ -4,6 +4,8 @@ import { Redirect, Stack } from 'expo-router';
 
 import { GameCloudBootstrap } from '@/components/game-cloud-bootstrap';
 
+import { IosUi } from '@/constants/iosUi';
+
 import { useAuth } from '@/lib/auth-context';
 
 export default function AppGroupLayout() {
@@ -14,7 +16,7 @@ export default function AppGroupLayout() {
       <View
         style={{
           flex: 1,
-          backgroundColor: '#F2F2F7',
+          backgroundColor: IosUi.secondarySystemGroupedBackground,
           alignItems: 'center',
           justifyContent: 'center',
         }}>
@@ -30,7 +32,7 @@ export default function AppGroupLayout() {
   return (
     <>
       <GameCloudBootstrap userId={user.id} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F2F2F7' } }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: IosUi.secondarySystemGroupedBackground } }} />
     </>
   );
 }
