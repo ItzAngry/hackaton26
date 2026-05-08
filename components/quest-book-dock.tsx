@@ -1,5 +1,14 @@
 import React, { useEffect } from 'react';
-import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import {
+  Image as RNImage,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type ImageStyle,
+} from 'react-native';
+import { Image } from 'expo-image';
 import Animated, {
   interpolate,
   useAnimatedStyle,
@@ -12,25 +21,36 @@ import { QuestTaskList, QuestTaskListHeader } from '@/components/quest-task-list
 import { AppText } from '@/components/ui/app-text';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 
+import { QUEST_BOOK_IMAGE } from '@/constants/battlefieldAssets';
 import { type Quest } from '@/store/useGameStore';
 
-const BOOK_ASSET = require('@/assets/images/Ancient_Open_Book_PNG_Transparent_Clipart.png');
+const PEEK_HEIGHT = 112;
+const SPRING = { damping: 22, stiffness: 220, mass: 0.85 };
 
-const PEEK_HEIGHT = 78;
-const SPRING = { damping: 20, stiffness: 210, mass: 0.9 };
+const WEB_PEEK_BUTTON_RESET =
+  Platform.OS === 'web'
+    ? ({
+        borderWidth: 0,
+        outlineWidth: 0,
+        cursor: 'pointer',
+        backgroundColor: 'transparent',
+        WebkitAppearance: 'none',
+        appearance: 'none',
+      } as Record<string, unknown>)
+    : null;
 
 /**
  * Native uses Image.resolveAssetSource; react-native-web omits it.
- * Match this asset’s IHDR so aspect ratio is identical on web.
+ * Match `assets/images/book.png` IHDR so aspect ratio is identical on web.
  */
-const BOOK_NATURAL_FALLBACK = { width: 8000, height: 5414 };
+const BOOK_NATURAL_FALLBACK = { width: 1280, height: 1280 };
 
 function getBookNaturalDimensions(): { width: number; height: number } {
-  const img = Image as typeof Image & {
+  const img = RNImage as typeof RNImage & {
     resolveAssetSource?: (src: object) => { width?: number; height?: number } | null;
   };
   if (typeof img.resolveAssetSource === 'function') {
-    const meta = img.resolveAssetSource(BOOK_ASSET as object);
+    const meta = img.resolveAssetSource(QUEST_BOOK_IMAGE as object);
     if (
       meta != null &&
       typeof meta.width === 'number' &&
@@ -47,8 +67,8 @@ function getBookNaturalDimensions(): { width: number; height: number } {
 function bookDimensions(windowW: number, windowH: number) {
   const natural = getBookNaturalDimensions();
   const aspect = natural.height / natural.width;
-  const maxBookH = Math.round(windowH * 0.86);
-  const maxW = Math.min(580, Math.max(300, Math.round(windowW * 0.58)));
+  const maxBookH = Math.round(windowH * 0.88);
+  const maxW = Math.min(720, Math.max(260, Math.round(windowW * 0.92)));
 
   let bookBaseW = maxW;
   let bookImgH = Math.round(bookBaseW * aspect);
@@ -65,7 +85,7 @@ type Props = {
   onRequestOpen: () => void;
   onClose: () => void;
   quests: Quest[];
-  onCompleteQuest: (id: string) => void;
+  onCompleteQuest: (id: string, proofUri: string) => void;
   canCompleteTasks: boolean;
 };
 
@@ -82,8 +102,9 @@ export function QuestBookDock({
   const progress = useSharedValue(0);
 
   const { bookBaseW, bookImgH } = bookDimensions(windowW, windowH);
-  /** Extra room so a slight open-scale doesn’t clip the top edge of the art. */
-  const expandedClipH = Math.ceil(bookImgH * 1.04) + 12;
+  const peekSheetW = bookBaseW + 32;
+  /** Cap book art when open so Today's plan (task list) gets more of the sheet. */
+  const bookHeaderMaxH = Math.round(Math.min(bookImgH, windowH * 0.22));
 
   useEffect(() => {
     progress.value = withSpring(visible ? 1 : 0, SPRING);
@@ -94,49 +115,78 @@ export function QuestBookDock({
     opacity: interpolate(progress.value, [0, 1], [0, 1]),
   }));
 
-  const clipStyle = useAnimatedStyle(() => ({
-    height: interpolate(progress.value, [0, 1], [PEEK_HEIGHT, expandedClipH]),
-  }));
-
-  /** Pivot at bottom-center so peek/open stays glued to bottom (no drifting to screen center). */
-  const bookMotionStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 1.03]) }],
+  const sheetStyle = useAnimatedStyle(() => ({
+    height: interpolate(progress.value, [0, 1], [PEEK_HEIGHT, windowH]),
+    width: interpolate(progress.value, [0, 1], [peekSheetW, windowW]),
   }));
 
   const panelStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 0.45, 1], [0, 0, 1]),
+    opacity: interpolate(progress.value, [0, 0.38, 1], [0, 0, 1]),
+    maxHeight: interpolate(progress.value, [0, 1], [0, Math.max(windowH, 800)]),
+    marginTop: interpolate(progress.value, [0, 1], [0, 8]),
   }));
 
+  const bookImgStyle: ImageStyle[] = [
+    styles.bookImg,
+    {
+      width: bookBaseW,
+      height: bookImgH,
+      maxHeight: visible ? bookHeaderMaxH : bookImgH,
+    },
+  ];
+
   return (
-    <View style={styles.root} pointerEvents="box-none">
+    <View
+      style={[
+        styles.root,
+        Platform.OS === 'web' &&
+          ({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-native-web supports fixed overlays
+            position: 'fixed' as any,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100%',
+            height: '100%',
+          } as const),
+      ]}
+      pointerEvents="box-none">
       <Animated.View
         style={[styles.backdrop, backdropStyle]}
         pointerEvents={visible ? 'auto' : 'none'}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close today's plan" />
       </Animated.View>
 
-      <View
-        style={[styles.dockColumn, { paddingBottom: Math.max(insets.bottom, 8) }]}
-        pointerEvents="box-none">
-        <Animated.View style={[styles.clip, { width: bookBaseW + 32 }, clipStyle]}>
-          <Animated.View
+      <View style={styles.dockColumn} pointerEvents="box-none">
+        <Animated.View style={[styles.sheet, sheetStyle, !visible && styles.sheetPeekCollapsed]}>
+          <View
             style={[
-              styles.bookStack,
-              {
-                width: bookBaseW,
-                minHeight: bookImgH,
-                transformOrigin: '50% 100%',
+              styles.sheetInner,
+              visible && {
+                paddingTop: Math.max(insets.top, 10),
+                paddingBottom: Math.max(insets.bottom, 12),
+                paddingHorizontal: 14,
               },
-              bookMotionStyle,
             ]}>
-            <Image
-              source={BOOK_ASSET}
-              style={[styles.bookImg, { width: bookBaseW, height: bookImgH }]}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-            />
+            {/** Collapsed: fixed-height overflow clips everything below — only top band of book.png is visible. */}
+            <View
+              style={[
+                styles.bookHeader,
+                visible ? { maxHeight: bookHeaderMaxH } : styles.bookPeekCrop,
+              ]}>
+              <Image
+                source={QUEST_BOOK_IMAGE}
+                style={bookImgStyle}
+                contentFit="contain"
+                transition={0}
+                accessibilityIgnoresInvertColors
+                pointerEvents="none"
+              />
+            </View>
+
             <Animated.View
-              style={[styles.taskPanel, panelStyle]}
+              style={[styles.taskPanelColumn, panelStyle]}
               pointerEvents={visible ? 'auto' : 'none'}>
               <View style={styles.taskPanelInner}>
                 <View style={styles.panelTop}>
@@ -161,11 +211,11 @@ export function QuestBookDock({
                   />
                 </View>
                 <AppText variant="caption1" color="secondary" style={styles.hint}>
-                  Bonus gold counts when tasks are marked during preparation (before defense starts).
+                  Bonus gold counts when tasks are completed with a proof photo during preparation (before defense starts).
                 </AppText>
               </View>
             </Animated.View>
-          </Animated.View>
+          </View>
 
           {!visible ? (
             <Pressable
@@ -173,7 +223,7 @@ export function QuestBookDock({
               accessibilityLabel="Open today's tasks"
               onPress={onRequestOpen}
               style={styles.peekTap}
-              hitSlop={{ top: 8, bottom: 0, left: 20, right: 20 }}
+              hitSlop={{ bottom: 8, top: 0, left: 20, right: 20 }}
             />
           ) : null}
         </Animated.View>
@@ -193,22 +243,58 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.34)',
+    backgroundColor: 'rgba(0,0,0,0.38)',
   },
   dockColumn: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
-  clip: {
+  /** Bottom-centered shell; collapsed height only shows top band (peek). */
+  sheet: {
+    overflow: 'hidden',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    backgroundColor: 'rgba(252, 250, 245, 0.97)',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(101, 67, 33, 0.14)',
+  },
+  /** Peek-only: no opaque panel behind art so book.png reads clearly at the bottom strip. */
+  sheetPeekCollapsed: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+  },
+  sheetInner: {
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  bookHeader: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    flexShrink: 0,
+  },
+  /** Hard clip to peek height — shows top of asset; everything below is cropped off. */
+  bookPeekCrop: {
+    height: PEEK_HEIGHT,
+    width: '100%',
     overflow: 'hidden',
     alignItems: 'center',
-    /** Top of book aligns to top of clip — only upper edge peeks above bottom of screen when collapsed. */
-    justifyContent: 'flex-start',
   },
-  bookStack: {
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+  bookImg: {
+    marginBottom: 0,
+  },
+  taskPanelColumn: {
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
+    overflow: 'hidden',
   },
   peekTap: {
     position: 'absolute',
@@ -217,25 +303,17 @@ const styles = StyleSheet.create({
     top: 0,
     height: PEEK_HEIGHT,
     zIndex: 4,
-  },
-  bookImg: {
-    marginBottom: -4,
-  },
-  taskPanel: {
-    position: 'absolute',
-    left: '7%',
-    right: '7%',
-    top: '10%',
-    bottom: '26%',
+    backgroundColor: 'transparent',
+    ...(WEB_PEEK_BUTTON_RESET ?? {}),
   },
   taskPanelInner: {
     flex: 1,
     minHeight: 0,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingTop: 6,
-    paddingBottom: 6,
-    backgroundColor: 'rgba(245, 232, 210, 0.94)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
+    backgroundColor: 'rgba(245, 232, 210, 0.96)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: PARCHMENT_BORDER,
   },

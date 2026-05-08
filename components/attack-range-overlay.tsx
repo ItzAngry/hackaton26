@@ -1,11 +1,11 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import type { MapPlayLayout } from '@/lib/mapPlayMetrics';
 import { pathAttackBand, pathProgressToLayoutPx } from '@/lib/tileMap';
 
 type Props = {
-  mapWidth: number;
-  mapHeight: number;
+  mapPlay: MapPlayLayout;
   pathCover: number;
   visible: boolean;
 };
@@ -13,14 +13,14 @@ type Props = {
 const STEPS = 26;
 const DOT = 11;
 
-export function AttackRangeOverlay({ mapWidth, mapHeight, pathCover, visible }: Props) {
-  if (!visible || mapWidth < 8 || mapHeight < 8) return null;
+export function AttackRangeOverlay({ mapPlay, pathCover, visible }: Props) {
+  if (!visible || mapPlay.viewW < 8 || mapPlay.viewH < 8) return null;
 
   const { lo, hi } = pathAttackBand(pathCover);
   const pts: { x: number; y: number }[] = [];
   for (let i = 0; i <= STEPS; i++) {
     const t = lo + ((hi - lo) * i) / STEPS;
-    pts.push(pathProgressToLayoutPx(t, mapWidth, mapHeight));
+    pts.push(pathProgressToLayoutPx(t, mapPlay));
   }
 
   return (

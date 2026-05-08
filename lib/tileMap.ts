@@ -1,9 +1,8 @@
-import {
-  PATH_CELL_ORDER,
-  TILE_COLS,
-  TILE_ROWS,
-  isBuildable,
-} from '@/constants/mapTileGrid';
+import { TILE_COLS, TILE_ROWS } from '@/constants/mapTileGrid';
+import { interpolateAlongPolylinePx, nearestPathProgressFromCellCenter } from '@/lib/mapGeometry';
+import { fullBleedMapPlayLayout, type MapPlayLayout } from '@/lib/mapPlayMetrics';
+
+import { useMapLayoutStore } from '@/store/useMapLayoutStore';
 
 /** Tower arc width along normalized path (same role as legacy lane band). */
 export const ATTACK_RANGE_PATH = 0.12;
@@ -12,26 +11,31 @@ export function tileCenterNorm(c: number, r: number): { nx: number; ny: number }
   return { nx: (c + 0.5) / TILE_COLS, ny: (r + 0.5) / TILE_ROWS };
 }
 
-export function tileCenterLayoutPx(c: number, r: number, mapW: number, mapH: number): { x: number; y: number } {
+export function tileCenterLayoutPx(c: number, r: number, layout: MapPlayLayout): { x: number; y: number } {
   const { nx, ny } = tileCenterNorm(c, r);
-  return { x: nx * mapW, y: ny * mapH };
+  return {
+    x: layout.originX + nx * layout.playW,
+    y: layout.originY + ny * layout.playH,
+  };
 }
 
 export function pickTileFromLocalPx(
   layoutX: number,
   layoutY: number,
-  mapW: number,
-  mapH: number
+  layout: MapPlayLayout
 ): { c: number; r: number } | null {
   const lx = Number(layoutX);
   const ly = Number(layoutY);
-  const w = Number(mapW);
-  const h = Number(mapH);
-  if (!Number.isFinite(lx) || !Number.isFinite(ly) || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+  const pw = Number(layout.playW);
+  const ph = Number(layout.playH);
+  if (!Number.isFinite(lx) || !Number.isFinite(ly) || !Number.isFinite(pw) || !Number.isFinite(ph) || pw <= 0 || ph <= 0) {
     return null;
   }
-  const nx = lx / w;
-  const ny = ly / h;
+  const nx = (lx - layout.originX) / pw;
+  const ny = (ly - layout.originY) / ph;
+  if (nx < 0 || nx > 1 || ny < 0 || ny > 1) {
+    return null;
+  }
   let c = Math.floor(nx * TILE_COLS);
   let r = Math.floor(ny * TILE_ROWS);
   c = Math.max(0, Math.min(TILE_COLS - 1, c));
@@ -39,18 +43,31 @@ export function pickTileFromLocalPx(
   return { c, r };
 }
 
-const pathLen = PATH_CELL_ORDER.length;
-const pathArcTotal = Math.max(1, pathLen - 1);
+function pathCellOrderLive() {
+  return useMapLayoutStore.getState().pathCellOrder;
+}
+
+function pathPolylineLive() {
+  return useMapLayoutStore.getState().pathPolylineNorm;
+}
+
+function battleMapLayoutLive(): MapPlayLayout {
+  const st = useMapLayoutStore.getState();
+  return st.battleMapLayout ?? fullBleedMapPlayLayout(400, 225);
+}
 
 /** pathProgress 1 = spawn (path index 0), 0 = goal (last index). */
-export function pathProgressToLayoutPx(
-  pathProgress: number,
-  mapW: number,
-  mapH: number
-): { x: number; y: number } {
+export function pathProgressToLayoutPx(pathProgress: number, layout: MapPlayLayout): { x: number; y: number } {
+  const poly = pathPolylineLive();
+  if (poly.length >= 2) {
+    return interpolateAlongPolylinePx(pathProgress, poly, layout);
+  }
+
+  const PATH_CELL_ORDER = pathCellOrderLive();
+  const pathLen = PATH_CELL_ORDER.length;
   if (pathLen < 2) {
     const p = PATH_CELL_ORDER[0];
-    return tileCenterLayoutPx(p.c, p.r, mapW, mapH);
+    return tileCenterLayoutPx(p.c, p.r, layout);
   }
   const p = Math.max(0, Math.min(1, pathProgress));
   const fi = (1 - p) * (pathLen - 1);
@@ -59,8 +76,8 @@ export function pathProgressToLayoutPx(
   const t = fi - i0;
   const a = PATH_CELL_ORDER[i0];
   const b = PATH_CELL_ORDER[i1];
-  const pa = tileCenterLayoutPx(a.c, a.r, mapW, mapH);
-  const pb = tileCenterLayoutPx(b.c, b.r, mapW, mapH);
+  const pa = tileCenterLayoutPx(a.c, a.r, layout);
+  const pb = tileCenterLayoutPx(b.c, b.r, layout);
   return {
     x: pa.x * (1 - t) + pb.x * t,
     y: pa.y * (1 - t) + pb.y * t,
@@ -87,7 +104,16 @@ function closestOnSegment(h: Pt, a: Pt, b: Pt): { q: Pt; segT: number } {
  * Path coverage scalar for a buildable tile: maps hero tile to [0,1] path axis
  * using closest point on path polyline (grid cell center space).
  */
-export function nearestPathProgressFromTile(c: number, r: number): number {
+export function nearestPathProgressFromTile(c: number, r: number, layout?: MapPlayLayout): number {
+  const L = layout ?? battleMapLayoutLive();
+  const poly = pathPolylineLive();
+  if (poly.length >= 2) {
+    return nearestPathProgressFromCellCenter(c, r, poly, L, TILE_COLS, TILE_ROWS);
+  }
+
+  const PATH_CELL_ORDER = pathCellOrderLive();
+  const pathLen = PATH_CELL_ORDER.length;
+  const pathArcTotal = Math.max(1, pathLen - 1);
   const h = cellCenterPt({ c, r });
   let bestDistSq = Infinity;
   let bestArc = 0;
@@ -120,31 +146,26 @@ export type TilePlacementResult =
   | { ok: true; c: number; r: number; pathCover: number; nx: number; ny: number }
   | { ok: false; reason: 'not_buildable' | 'bad_touch' };
 
-export function tryTilePlacementTap(
-  layoutX: number,
-  layoutY: number,
-  mapW: number,
-  mapH: number
-): TilePlacementResult {
+export function tryTilePlacementTap(layoutX: number, layoutY: number, layout: MapPlayLayout): TilePlacementResult {
   const lx = Number(layoutX);
   const ly = Number(layoutY);
-  const w = Number(mapW);
-  const h = Number(mapH);
-  if (!Number.isFinite(lx) || !Number.isFinite(ly) || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+  const vw = layout.viewW;
+  const vh = layout.viewH;
+  if (!Number.isFinite(lx) || !Number.isFinite(ly) || !Number.isFinite(vw) || !Number.isFinite(vh) || vw <= 0 || vh <= 0) {
     return { ok: false, reason: 'bad_touch' };
   }
-  if (lx < 0 || ly < 0 || lx > w || ly > h) {
+  if (lx < 0 || ly < 0 || lx > vw || ly > vh) {
     return { ok: false, reason: 'bad_touch' };
   }
-  const picked = pickTileFromLocalPx(lx, ly, mapW, mapH);
+  const picked = pickTileFromLocalPx(lx, ly, layout);
   if (!picked) {
     return { ok: false, reason: 'bad_touch' };
   }
   const { c, r } = picked;
-  if (!isBuildable(c, r)) {
+  if (!useMapLayoutStore.getState().isBuildableTile(c, r)) {
     return { ok: false, reason: 'not_buildable' };
   }
   const { nx, ny } = tileCenterNorm(c, r);
-  const pathCover = nearestPathProgressFromTile(c, r);
+  const pathCover = nearestPathProgressFromTile(c, r, layout);
   return { ok: true, c, r, pathCover, nx, ny };
 }

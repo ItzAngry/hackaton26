@@ -3,16 +3,14 @@ import { Alert, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { IosUi } from '@/constants/iosUi';
-
+import type { MapPlayLayout } from '@/lib/mapPlayMetrics';
 import { pickTileFromLocalPx } from '@/lib/tileMap';
 
 type Props = {
   cx: number;
   cy: number;
   pad: number;
-  mapW: number;
-  mapH: number;
+  mapPlay: MapPlayLayout;
   unitId: string;
   selected: boolean;
   onTapSelect: () => void;
@@ -27,8 +25,7 @@ export function DraggablePlacedUnitChip({
   cx,
   cy,
   pad,
-  mapW,
-  mapH,
+  mapPlay,
   unitId,
   selected,
   onTapSelect,
@@ -46,7 +43,7 @@ export function DraggablePlacedUnitChip({
       const d = Math.hypot(translationX, translationY);
       const cxChip = cx + pad / 2 + translationX;
       const cyChip = cy + pad / 2 + translationY;
-      const picked = pickTileFromLocalPx(cxChip, cyChip, mapW, mapH);
+      const picked = pickTileFromLocalPx(cxChip, cyChip, mapPlay);
       if (!picked) {
         if (d < 36) onTapSelect();
         return;
@@ -59,7 +56,7 @@ export function DraggablePlacedUnitChip({
         }
       }
     },
-    [cx, cy, pad, mapW, mapH, unitId, movePlacedUnit, onTapSelect]
+    [cx, cy, pad, mapPlay, unitId, movePlacedUnit, onTapSelect]
   );
 
   const tapOnly = useCallback(() => {
@@ -120,17 +117,18 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 2,
-    borderWidth: 2,
-    borderStyle: 'solid',
-    borderColor: IosUi.systemBlue,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     zIndex: 10,
     elevation: 8,
   },
   selected: {
-    borderColor: '#34C759',
-    borderWidth: 3,
+    shadowColor: '#34C759',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    elevation: 14,
   },
   selectedLift: {
     zIndex: 24,

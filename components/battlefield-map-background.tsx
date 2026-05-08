@@ -18,7 +18,7 @@ export function BattlefieldMapBackground({ width, height }: Props) {
       <Image
         source={BATTLEFIELD_MAP_IMAGE}
         style={StyleSheet.absoluteFillObject}
-        contentFit="fill"
+        contentFit="contain"
         transition={0}
       />
     </View>

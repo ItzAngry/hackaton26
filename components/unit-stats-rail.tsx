@@ -14,9 +14,22 @@ import {
   BOOST_DEFINITIONS,
   effectiveUnitAttackIntervalSec,
   effectiveUnitDamage,
+  type ActiveBuff,
   type GameUnit,
   useGameStore,
 } from '@/store/useGameStore';
+
+/** Merge duplicate buff lines (same boost type or same label+hint) into one row with ×count. */
+function groupedBuffLines(buffs: ActiveBuff[]): { key: string; label: string; statHint: string; count: number }[] {
+  const map = new Map<string, { label: string; statHint: string; count: number }>();
+  for (const b of buffs) {
+    const key = b.boostId ?? `${b.label}\u0000${b.statHint}`;
+    const prev = map.get(key);
+    if (prev) prev.count += 1;
+    else map.set(key, { label: b.label, statHint: b.statHint, count: 1 });
+  }
+  return [...map.entries()].map(([key, row]) => ({ key, ...row }));
+}
 
 type Props = {
   unit: GameUnit;
@@ -127,9 +140,9 @@ export function UnitStatsRail({ unit, onClose, floatingOverlay }: Props) {
           None active
         </AppText>
       ) : (
-        unit.buffs.map((b) => (
-          <AppText key={b.id} variant="footnote">
-            {b.label} · {b.statHint}
+        groupedBuffLines(unit.buffs).map((row) => (
+          <AppText key={row.key} variant="footnote">
+            {row.label} · {row.statHint} ×{row.count}
           </AppText>
         ))
       )}

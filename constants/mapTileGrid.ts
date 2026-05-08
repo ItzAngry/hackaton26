@@ -1,6 +1,6 @@
 /**
  * Tactical grid over the battle panel.
- * BLOCKED_CELLS = path / road (cannot place defenders).
+ * Path cells (blocked set) = road — cannot place defenders.
  * PATH_CELL_ORDER: spawn-first (pathProgress 1) → goal-last (pathProgress 0).
  */
 
@@ -14,8 +14,8 @@ export const TILE_COLS = GRID_COLS;
 /** @deprecated Use GRID_ROWS */
 export const TILE_ROWS = GRID_ROWS;
 
-/** Cells where the road exists — placement blocked here (same as legacy `path` tiles). */
-export const BLOCKED_CELLS = new Set<string>([
+/** Shipped default: cells where the road exists (same as unique cells along DEFAULT_PATH_CELL_ORDER). */
+export const DEFAULT_BLOCKED_CELL_KEYS: readonly string[] = [
   '2,4',
   '3,4',
   '4,4',
@@ -30,7 +30,7 @@ export const BLOCKED_CELLS = new Set<string>([
   '5,5',
   '10,3',
   '10,5',
-]);
+];
 
 export type SceneSize = {
   width: number;
@@ -56,14 +56,10 @@ export function getCellFromTouch(x: number, y: number, sceneSize: SceneSize): Gr
   return { col, row, cellWidth, cellHeight };
 }
 
-export function isBuildableCell(col: number, row: number): boolean {
-  return !BLOCKED_CELLS.has(cellKey(col, row));
-}
-
 /**
  * Enemy march along the road: right spawn → left goal, including vertical spurs off row 4.
  */
-export const PATH_CELL_ORDER: { c: number; r: number }[] = [
+export const DEFAULT_PATH_CELL_ORDER: readonly { c: number; r: number }[] = [
   { c: 11, r: 4 },
   { c: 10, r: 4 },
   { c: 10, r: 3 },
@@ -84,33 +80,23 @@ export const PATH_CELL_ORDER: { c: number; r: number }[] = [
   { c: 2, r: 4 },
 ];
 
-function buildTilesMask(): TileKind[][] {
+export function buildTilesFromBlocked(blockedKeys: Set<string>): TileKind[][] {
   const rows: TileKind[][] = [];
   for (let r = 0; r < GRID_ROWS; r++) {
     rows[r] = [];
     for (let c = 0; c < GRID_COLS; c++) {
-      rows[r][c] = BLOCKED_CELLS.has(cellKey(c, r)) ? 'path' : 'buildable';
+      rows[r][c] = blockedKeys.has(cellKey(c, r)) ? 'path' : 'buildable';
     }
   }
   return rows;
 }
 
-export const TILES: TileKind[][] = buildTilesMask();
-
-export function tileKindAt(c: number, r: number): TileKind {
+export function tileKindFromTiles(tiles: TileKind[][], c: number, r: number): TileKind {
   if (!Number.isFinite(c) || !Number.isFinite(r)) return 'blocked';
   const ic = Math.trunc(c);
   const ir = Math.trunc(r);
   if (ir < 0 || ir >= GRID_ROWS || ic < 0 || ic >= GRID_COLS) return 'blocked';
-  const row = TILES[ir];
+  const row = tiles[ir];
   if (!row) return 'blocked';
   return row[ic] ?? 'blocked';
-}
-
-export function isBuildable(c: number, r: number): boolean {
-  return tileKindAt(c, r) === 'buildable';
-}
-
-export function isPath(c: number, r: number): boolean {
-  return tileKindAt(c, r) === 'path';
 }

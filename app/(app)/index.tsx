@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,34 +13,37 @@ import { Redirect } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BATTLEFIELD_MAP_ASPECT } from '@/constants/battlefieldAssets';
+import { cellKey } from '@/constants/mapTileGrid';
 import { HERO_BY_ID, getHeroIdForUnit } from '@/constants/heroDefinitions';
 import { BattleTheme } from '@/constants/battleTheme';
 import { IosUi } from '@/constants/iosUi';
 
 import { isBerlinEveningHour } from '@/lib/europeTime';
+import { computeMapPlayLayout } from '@/lib/mapPlayMetrics';
+import { resolveLocalMapCoordsAsync } from '@/lib/mapPointerCoords';
 import { tileCenterLayoutPx, tryTilePlacementTap } from '@/lib/tileMap';
 import { useOnboardingGate } from '@/lib/useOnboardingGate';
 
 import { AttackRangeOverlay } from '@/components/attack-range-overlay';
 import { BattleShopSidebar } from '@/components/battle-shop-sidebar';
 import { BattlefieldMapBackground } from '@/components/battlefield-map-background';
+import { BattlefieldPathTrackOverlay } from '@/components/battlefield-path-track-overlay';
 import { BattlefieldRoadMap } from '@/components/battlefield-road-map';
 import { DraggablePlacedUnitChip } from '@/components/draggable-placed-unit-chip';
 import { HeroSprite, IdleHeroBob } from '@/components/hero-sprite';
-import { TileGridOverlay } from '@/components/tile-grid-overlay';
+import { PlacementPadsLayer } from '@/components/placement-pads-layer';
+import { PlacementPathHoverOverlay } from '@/components/placement-path-hover-overlay';
 import { QuestBookDock } from '@/components/quest-book-dock';
 import { GameModal } from '@/components/game-modal';
 import { UnitStatsRail } from '@/components/unit-stats-rail';
 import { AppText } from '@/components/ui/app-text';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 
-import { type Enemy, useGameStore } from '@/store/useGameStore';
+import { PLACE_DEFENDER_ENERGY_COST, benchPlacementWaivesEnergy, useGameStore } from '@/store/useGameStore';
+import { useMapLayoutStore } from '@/store/useMapLayoutStore';
 
 const PAD = BattleTheme.grassPadMinSize;
-
-function enemyEmoji(_e: Enemy): string {
-  return '👾';
-}
 
 export default function BattleScreen() {
   const gate = useOnboardingGate();
@@ -53,9 +57,11 @@ function BattleScreenInner() {
   const { width: windowW } = useWindowDimensions();
   const landscapeUi = windowW > 480;
   const mobilePortrait = windowW < 560 && !landscapeUi;
-  const SIDEBAR_OVERLAY_WIDTH = 120;
+  /** Portrait overlay rail: wide enough for stacked currency chips + menu (was 120 — too tight). */
+  const SIDEBAR_OVERLAY_WIDTH = 138;
 
   const gold = useGameStore((s) => s.gold);
+  const energy = useGameStore((s) => s.energy);
   const dayStreak = useGameStore((s) => s.dayStreak);
   const dayPhase = useGameStore((s) => s.dayPhase);
   const eveningEndsAtMs = useGameStore((s) => s.eveningEndsAtMs);
@@ -89,10 +95,11 @@ function BattleScreenInner() {
   const resetAfterDefeatDemo = useGameStore((s) => s.resetAfterDefeatDemo);
 
   const [questOpen, setQuestOpen] = useState(false);
-  const [tipsOpen, setTipsOpen] = useState(false);
+  const [instructionOpen, setInstructionOpen] = useState(false);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [selectedFieldUnitId, setSelectedFieldUnitId] = useState<string | null>(null);
   const [mapLayout, setMapLayout] = useState<{ width: number; height: number } | null>(null);
+  const [pathHoverLocal, setPathHoverLocal] = useState<{ x: number; y: number } | null>(null);
   const mapPlayRef = useRef<View>(null);
   const [, setClockTick] = useState(0);
 
@@ -101,12 +108,37 @@ function BattleScreenInner() {
     return () => clearInterval(id);
   }, []);
 
-  const unplaced = useMemo(() => units.filter((u) => u.placedPathCover === null), [units]);
+  const mapPlay = useMemo(
+    () =>
+      mapLayout && mapLayout.width > 0 && mapLayout.height > 0
+        ? computeMapPlayLayout(mapLayout.width, mapLayout.height, BATTLEFIELD_MAP_ASPECT)
+        : null,
+    [mapLayout]
+  );
+
+  useEffect(() => {
+    if (mapPlay) {
+      useMapLayoutStore.getState().setBattleMapLayout(mapPlay);
+    }
+  }, [mapPlay]);
+
+  const unplaced = useMemo(
+    () => units.filter((u) => u.placedTile == null && u.placedPathCover == null),
+    [units]
+  );
 
   const placedOnField = useMemo(
     () => units.filter((u) => u.placedTile !== null && u.placedPathCover !== null),
     [units]
   );
+
+  const occupiedTileKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of units) {
+      if (u.placedTile) s.add(cellKey(u.placedTile.c, u.placedTile.r));
+    }
+    return s;
+  }, [units]);
 
   const selectedFieldUnit = useMemo(() => {
     if (!selectedFieldUnitId) return null;
@@ -133,8 +165,10 @@ function BattleScreenInner() {
 
   const phaseSub =
     dayPhase === 'morning'
-      ? `Place defenders · open Today's plan for tasks · next defense is difficulty day ${eveningDifficultyDay}`
+      ? `Place defenders · open Today's plan for tasks · evening defense starts 18:00 every day · difficulty day ${eveningDifficultyDay}`
       : `${enemies.length} on field · ${spawnRemaining} incoming`;
+
+  const rockPadSlots = useMapLayoutStore((s) => s.placementPads.length);
 
   const battleMenu = useMemo(
     () => ({
@@ -157,43 +191,48 @@ function BattleScreenInner() {
       : undefined;
 
   const attemptPlaceAt = (e: GestureResponderEvent) => {
-    if (!selectedPlaceId || !mapLayout) return;
-    const ne = e.nativeEvent as GestureResponderEvent['nativeEvent'] & {
-      offsetX?: number;
-      offsetY?: number;
-    };
-    const lxRaw =
-      typeof ne.locationX === 'number'
-        ? ne.locationX
-        : typeof ne.offsetX === 'number'
-          ? ne.offsetX
-          : undefined;
-    const lyRaw =
-      typeof ne.locationY === 'number'
-        ? ne.locationY
-        : typeof ne.offsetY === 'number'
-          ? ne.offsetY
-          : undefined;
-    const hit = tryTilePlacementTap(
-      lxRaw ?? Number.NaN,
-      lyRaw ?? Number.NaN,
-      mapLayout.width,
-      mapLayout.height
-    );
-    if (!hit.ok) {
-      if (hit.reason === 'bad_touch') {
+    const unitId = selectedPlaceId;
+    const play = mapPlay;
+    if (!unitId || !play) return;
+    resolveLocalMapCoordsAsync(e.nativeEvent, mapPlayRef.current, (coords) => {
+      if (!coords) {
         Alert.alert('Try again', 'Could not read tap position. Tap directly on the map.');
         return;
       }
-      Alert.alert('Invalid tile', 'Place defenders only on green tiles — not on the brown path.');
-      return;
-    }
-    const ok = placeUnit(selectedPlaceId, hit.c, hit.r, hit.pathCover);
-    if (!ok) {
-      Alert.alert('Cannot place', 'Too close to another defender or unit already on the field.');
-      return;
-    }
-    setSelectedPlaceId(null);
+      const hit = tryTilePlacementTap(coords.lx, coords.ly, play);
+      if (!hit.ok) {
+        if (hit.reason === 'bad_touch') {
+          Alert.alert('Try again', 'Could not read tap position. Tap directly on the map.');
+          return;
+        }
+        Alert.alert(
+          'Invalid tile',
+          rockPadSlots > 0
+            ? 'Place defenders only on rock pads — not on the path.'
+            : 'Place defenders only on buildable grass — not on the brown path.'
+        );
+        return;
+      }
+      const ok = placeUnit(unitId, hit.c, hit.r, hit.pathCover);
+      if (!ok) {
+        const st = useGameStore.getState();
+        const u = st.units.find((x) => x.id === unitId);
+        const onBench = u != null && u.placedTile == null && u.placedPathCover == null;
+        const freePlace = u != null && benchPlacementWaivesEnergy(u);
+        if (u && !onBench) {
+          Alert.alert('Cannot place', 'This defender is already on the map.');
+        } else if (!freePlace && st.energy < PLACE_DEFENDER_ENERGY_COST) {
+          Alert.alert(
+            'Not enough energy',
+            'Complete tasks in Today\'s plan during preparation to earn energy for placing defenders.'
+          );
+        } else {
+          Alert.alert('Cannot place', 'Too close to another defender or another placement rule blocked this tile.');
+        }
+        return;
+      }
+      setSelectedPlaceId(null);
+    });
   };
 
   const heroDragPlacement = useCallback(
@@ -202,22 +241,32 @@ function BattleScreenInner() {
       const node = mapPlayRef.current;
       if (!ml || !node) return;
       node.measureInWindow((mx, my, mw, mh) => {
-        const mapW = mw > 0 ? mw : ml.width;
-        const mapH = mh > 0 ? mh : ml.height;
+        const vw = mw > 0 ? mw : ml.width;
+        const vh = mh > 0 ? mh : ml.height;
+        const play = computeMapPlayLayout(vw, vh, BATTLEFIELD_MAP_ASPECT);
         const lx = absoluteX - mx;
         const ly = absoluteY - my;
-        const hit = tryTilePlacementTap(lx, ly, mapW, mapH);
+        const hit = tryTilePlacementTap(lx, ly, play);
         if (!hit.ok) return;
         const ok = recruitHeroAndPlaceAt(heroId, hit.c, hit.r, hit.pathCover);
         if (!ok) {
-          Alert.alert(
-            'Cannot recruit here',
-            'Pick another empty green tile — not the path, and not too close to another defender.'
-          );
+          if (useGameStore.getState().energy < PLACE_DEFENDER_ENERGY_COST) {
+            Alert.alert(
+              'Not enough energy',
+              'Complete tasks in Today\'s plan during preparation to earn energy for placing defenders.'
+            );
+          } else {
+            Alert.alert(
+              'Cannot recruit here',
+              rockPadSlots > 0
+                ? 'Drop on an empty rock pad — not the path, and not too close to another defender.'
+                : 'Pick another empty grass tile — not the path, and not too close to another defender.'
+            );
+          }
         }
       });
     },
-    [mapLayout, recruitHeroAndPlaceAt]
+    [mapLayout, recruitHeroAndPlaceAt, rockPadSlots]
   );
 
   return (
@@ -234,40 +283,54 @@ function BattleScreenInner() {
                     const { width, height } = e.nativeEvent.layout;
                     if (width > 0 && height > 0) setMapLayout({ width, height });
                   }}>
-                  {mapLayout ? (
+                  {mapLayout && mapPlay ? (
                     <>
                       <View style={styles.mapGestureRoot}>
                         <BattlefieldMapBackground width={mapLayout.width} height={mapLayout.height} />
-                        <TileGridOverlay width={mapLayout.width} height={mapLayout.height} />
+                        <BattlefieldPathTrackOverlay mapPlay={mapPlay} />
+                        <PlacementPadsLayer mapPlay={mapPlay} occupiedTileKeys={occupiedTileKeys} />
                         {statsOverlayVisible && pathCoverForRange !== undefined ? (
-                          <AttackRangeOverlay
-                            mapWidth={mapLayout.width}
-                            mapHeight={mapLayout.height}
-                            pathCover={pathCoverForRange}
-                            visible
-                          />
+                          <AttackRangeOverlay mapPlay={mapPlay} pathCover={pathCoverForRange} visible />
                         ) : null}
-                        <BattlefieldRoadMap
-                          enemies={enemies}
-                          enemyEmoji={enemyEmoji}
-                          width={mapLayout.width}
-                          height={mapLayout.height}
-                        />
+                        <BattlefieldRoadMap enemies={enemies} mapPlay={mapPlay} />
                         {selectedPlaceId ? (
-                          <Pressable
-                            accessibilityLabel="Place defender on buildable tile"
-                            style={StyleSheet.absoluteFillObject}
-                            onPress={attemptPlaceAt}
-                          />
+                          <>
+                            <PlacementPathHoverOverlay
+                              mapPlay={mapPlay}
+                              layoutX={pathHoverLocal?.x ?? null}
+                              layoutY={pathHoverLocal?.y ?? null}
+                            />
+                            <View
+                              accessibilityLabel="Place defender on buildable tile"
+                              style={StyleSheet.absoluteFillObject}
+                              onTouchMove={(e) => {
+                                const { locationX, locationY } = e.nativeEvent;
+                                setPathHoverLocal({ x: locationX, y: locationY });
+                              }}
+                              onTouchEnd={(e) => {
+                                attemptPlaceAt(e);
+                                setPathHoverLocal(null);
+                              }}
+                              onTouchCancel={() => setPathHoverLocal(null)}
+                              {...(Platform.OS === 'web'
+                                ? {
+                                    onPointerMove: (e: { nativeEvent: { offsetX?: number; offsetY?: number; locationX?: number; locationY?: number } }) => {
+                                      const ne = e.nativeEvent;
+                                      const lx = typeof ne.offsetX === 'number' ? ne.offsetX : ne.locationX;
+                                      const ly = typeof ne.offsetY === 'number' ? ne.offsetY : ne.locationY;
+                                      if (typeof lx === 'number' && typeof ly === 'number') {
+                                        setPathHoverLocal({ x: lx, y: ly });
+                                      }
+                                    },
+                                    onPointerLeave: () => setPathHoverLocal(null),
+                                  }
+                                : {})}
+                            />
+                          </>
                         ) : null}
                         {placedOnField.map((u) => {
                           const tile = u.placedTile!;
-                          const { x: tcx, y: tcy } = tileCenterLayoutPx(
-                            tile.c,
-                            tile.r,
-                            mapLayout.width,
-                            mapLayout.height
-                          );
+                          const { x: tcx, y: tcy } = tileCenterLayoutPx(tile.c, tile.r, mapPlay);
                           const cx = tcx - PAD / 2;
                           const cy = tcy - PAD / 2;
                           const selHere = statsOverlayVisible && selectedFieldUnit?.id === u.id;
@@ -277,8 +340,7 @@ function BattleScreenInner() {
                               cx={cx}
                               cy={cy}
                               pad={PAD}
-                              mapW={mapLayout.width}
-                              mapH={mapLayout.height}
+                              mapPlay={mapPlay}
                               unitId={u.id}
                               selected={selHere}
                               onTapSelect={() => {
@@ -295,7 +357,7 @@ function BattleScreenInner() {
                                       sheetW={def.sheetW}
                                       sheetH={def.sheetH}
                                       frames={def.frames}
-                                      size={Math.round(PAD * 0.78)}
+                                      size={Math.round(PAD * 0.92)}
                                     />
                                   ) : null;
                                 })()}
@@ -307,15 +369,21 @@ function BattleScreenInner() {
                           );
                         })}
                       </View>
-                      <View style={styles.fortHud} pointerEvents="none">
-                        <AppText variant="title3">🏰</AppText>
+                      <View
+                        style={[styles.fortHud, { top: Math.max(insets.top, 8) }]}
+                        pointerEvents="none">
+                        <AppText variant="title3" style={styles.fortHudEmoji}>
+                          🏰
+                        </AppText>
                         <View style={styles.fortHudText}>
-                          <AppText variant="caption1">Fortress</AppText>
+                          <AppText variant="caption1" style={styles.fortHudLabel}>
+                            Fortress
+                          </AppText>
                           <View style={styles.hpTrack}>
                             <View style={[styles.hpFill, { width: `${hpPct}%` }]} />
                           </View>
                         </View>
-                        <AppText variant="caption1" color="secondary">
+                        <AppText variant="caption1" color="secondary" style={styles.fortHudHp}>
                           {fortressHp}/{fortressMaxHp}
                         </AppText>
                       </View>
@@ -360,11 +428,12 @@ function BattleScreenInner() {
                   <BattleShopSidebar
                     variant="overlay"
                     gold={gold}
+                    energy={energy}
                     phaseTitle={phaseLabel}
                     phaseSub={phaseSub}
                     menu={battleMenu}
                     heroDragPlacement={heroDragPlacement}
-                    onTipsPress={() => setTipsOpen(true)}
+                    onInstructionPress={() => setInstructionOpen(true)}
                   />
                 </View>
               </View>
@@ -372,11 +441,12 @@ function BattleScreenInner() {
               <BattleShopSidebar
                 variant="rail"
                 gold={gold}
+                energy={energy}
                 phaseTitle={phaseLabel}
                 phaseSub={phaseSub}
                 menu={battleMenu}
                 heroDragPlacement={heroDragPlacement}
-                onTipsPress={() => setTipsOpen(true)}
+                onInstructionPress={() => setInstructionOpen(true)}
                 landscapeCompact={landscapeUi}
               />
             )}
@@ -428,22 +498,18 @@ function BattleScreenInner() {
         onRequestOpen={() => setQuestOpen(true)}
         onClose={() => setQuestOpen(false)}
         quests={quests}
-        onCompleteQuest={(id) => completeQuest(id)}
+        onCompleteQuest={(id, proofUri) => completeQuest(id, proofUri)}
         canCompleteTasks={dayPhase === 'morning'}
       />
 
-      <GameModal visible={tipsOpen} onRequestClose={() => setTipsOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setTipsOpen(false)}>
-          <Pressable style={styles.tipsCard} onPress={(e) => e.stopPropagation()}>
-            <AppText variant="title3">Tips</AppText>
+      <GameModal visible={instructionOpen} onRequestClose={() => setInstructionOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setInstructionOpen(false)}>
+          <Pressable style={styles.instructionCard} onPress={(e) => e.stopPropagation()}>
+            <AppText variant="title3">Instruction</AppText>
             <AppText variant="footnote" color="secondary">
-              Preparation only: recruit and place defenders (long-press a hero onto a green tile, or tap roster chips).
-              Open the book at bottom center or the menu Today&apos;s plan for bonus-gold tasks before you defend. Evening is the
-              only combat phase — start timed defense when ready (~20 min; Berlin cues often ~18:00). Survive with your
-              fortress standing for streak progression; fortress loss resets your run. Recall defenders from their stats card.
-              Today&apos;s plan is optional support, not a gate.
+              {`1. Complete tasks in real life to get energy.\n\n2. Use that energy to build your own tower defence.\n\n3. Survive the day and get a streak.`}
             </AppText>
-            <SecondaryButton title="Close" onPress={() => setTipsOpen(false)} />
+            <SecondaryButton title="Close" onPress={() => setInstructionOpen(false)} />
           </Pressable>
         </Pressable>
       </GameModal>
@@ -498,24 +564,39 @@ const styles = StyleSheet.create({
   },
   fortHud: {
     position: 'absolute',
-    top: 6,
-    left: 6,
+    left: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    maxWidth: '78%',
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(60,60,67,0.12)',
+    maxWidth: '72%',
     zIndex: 12,
-    elevation: 4,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+  },
+  fortHudEmoji: {
+    lineHeight: 26,
+  },
+  fortHudLabel: {
+    fontWeight: '600',
+    opacity: 0.92,
+  },
+  fortHudHp: {
+    fontVariant: ['tabular-nums'],
   },
   fortHudText: {
     flex: 1,
-    gap: 4,
+    gap: 5,
     minWidth: 0,
-    maxWidth: 160,
+    maxWidth: 140,
   },
   unitHudWrap: {
     position: 'absolute',
@@ -594,7 +675,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 18,
   },
-  tipsCard: {
+  instructionCard: {
     backgroundColor: IosUi.systemBackground,
     borderRadius: 16,
     padding: 18,

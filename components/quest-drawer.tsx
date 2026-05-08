@@ -18,7 +18,7 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   quests: Quest[];
-  onCompleteQuest: (id: string) => void;
+  onCompleteQuest: (id: string, proofUri: string) => void;
 };
 
 const DRAWER_FRACTION = 0.33;

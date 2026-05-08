@@ -13,10 +13,12 @@ type Props = {
   heroId: string;
   compact?: boolean;
   onDragEndScreen: (absoluteX: number, absoluteY: number, heroId: string) => void;
+  /** Shown under subtitle when recruiting/placing costs energy (e.g. battlefield shop grid). */
+  placeCostHint?: string;
 };
 
 /** Long-press, then drag toward the map; recruit is applied only when drop resolves on a legal tile (parent). */
-export function DraggableHeroCard({ heroId, compact, onDragEndScreen }: Props) {
+export function DraggableHeroCard({ heroId, compact, onDragEndScreen, placeCostHint }: Props) {
   const def = HERO_BY_ID[heroId];
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
@@ -55,13 +57,21 @@ export function DraggableHeroCard({ heroId, compact, onDragEndScreen }: Props) {
   return (
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.shell, compact && styles.shellCompact, animatedStyle]}>
-        <HeroCardFace def={def} compact={compact} />
+        <HeroCardFace def={def} compact={compact} placeCostHint={placeCostHint} />
       </Animated.View>
     </GestureDetector>
   );
 }
 
-export function HeroCardFace({ def, compact }: { def: HeroDefinition; compact?: boolean }) {
+export function HeroCardFace({
+  def,
+  compact,
+  placeCostHint,
+}: {
+  def: HeroDefinition;
+  compact?: boolean;
+  placeCostHint?: string;
+}) {
   const spriteSize = compact ? 44 : 56;
   return (
     <View style={styles.faceInner}>
@@ -80,6 +90,11 @@ export function HeroCardFace({ def, compact }: { def: HeroDefinition; compact?: 
       <AppText variant="caption1" color="secondary" numberOfLines={2} style={styles.sub}>
         {def.subtitle}
       </AppText>
+      {placeCostHint ? (
+        <AppText variant="footnote" color="tint" numberOfLines={1} style={styles.placeHint}>
+          {placeCostHint}
+        </AppText>
+      ) : null}
     </View>
   );
 }
@@ -114,5 +129,10 @@ const styles = StyleSheet.create({
   },
   sub: {
     textAlign: 'center',
+  },
+  placeHint: {
+    textAlign: 'center',
+    marginTop: 2,
+    fontWeight: '600',
   },
 });

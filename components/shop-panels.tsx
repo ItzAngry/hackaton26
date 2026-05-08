@@ -10,7 +10,12 @@ import { Card } from '@/components/ui/card';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 
-import { BOOST_DEFINITIONS, useGameStore } from '@/store/useGameStore';
+import { BOOST_DEFINITIONS, PLACE_DEFENDER_ENERGY_COST, useGameStore } from '@/store/useGameStore';
+
+/** Drag from battle sidebar onto map — spends energy for a brand-new recruit line; redeploys after recall are free from roster. */
+const HERO_BATTLE_DRAG_PLACE_HINT = `⚡ ${PLACE_DEFENDER_ENERGY_COST}`;
+/** Shop screen: bench recruit is free; first map place from roster costs energy; redeploy after recall is free. */
+const HERO_SHOP_BENCH_HINT = `Free recruit`;
 
 export function ShopHeroGrid({
   compact,
@@ -34,6 +39,8 @@ export function ShopHeroGrid({
 
   const handleBenchTap = benchTapRecruit ?? defaultBenchTap;
 
+  const placeCostHint = heroDragPlacement ? HERO_BATTLE_DRAG_PLACE_HINT : HERO_SHOP_BENCH_HINT;
+
   const rows = compact
     ? HERO_DEFINITIONS.map((h) => [h])
     : (() => {
@@ -55,6 +62,7 @@ export function ShopHeroGrid({
                 heroId={h.id}
                 compact={compact}
                 onDragEndScreen={heroDragPlacement}
+                placeCostHint={placeCostHint}
               />
             ) : (
               <Pressable
@@ -67,7 +75,7 @@ export function ShopHeroGrid({
                   compact && styles.heroFaceCompact,
                   pressed && styles.heroFacePressed,
                 ]}>
-                <HeroCardFace def={h} compact={compact} />
+                <HeroCardFace def={h} compact={compact} placeCostHint={placeCostHint} />
               </Pressable>
             )
           )}
@@ -165,7 +173,9 @@ export function ShopUnitsIntroScroll({
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <AppText variant="footnote" color="secondary" style={styles.intro}>
-        Tap a hero to add them to your roster (free). Each animal has its own stats and idle animation.
+        Tap a hero to add them to your roster (free). Placing a defender on the map costs {PLACE_DEFENDER_ENERGY_COST}{' '}
+        energy — earn energy by completing daily tasks with a proof photo during preparation. Each animal has its own
+        stats and idle animation.
       </AppText>
       {children}
     </ScrollView>

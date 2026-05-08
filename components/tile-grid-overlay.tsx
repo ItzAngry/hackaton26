@@ -4,18 +4,35 @@ import Svg, { Line, Rect } from 'react-native-svg';
 import {
   TILE_COLS,
   TILE_ROWS,
-  TILES,
   type TileKind,
+  tileKindFromTiles,
 } from '@/constants/mapTileGrid';
 
+import { useMapLayoutStore } from '@/store/useMapLayoutStore';
+
+/** Strong tint. */
+const GRID_DEBUG_STRONG = process.env.EXPO_PUBLIC_SHOW_MAP_GRID === '1';
+/** Default: no grid lines on battle (paint path/pads in /admin instead). */
+const SHOW_GRID_LINES = process.env.EXPO_PUBLIC_SHOW_MAP_GRID_LINES === '1';
+
 function fillFor(kind: TileKind): string {
+  if (GRID_DEBUG_STRONG) {
+    switch (kind) {
+      case 'path':
+        return 'rgba(154, 101, 50, 0.28)';
+      case 'buildable':
+        return 'rgba(76, 175, 80, 0.12)';
+      default:
+        return 'rgba(46, 52, 64, 0.35)';
+    }
+  }
   switch (kind) {
     case 'path':
-      return 'rgba(154, 101, 50, 0.28)';
+      return 'rgba(154, 101, 50, 0.11)';
     case 'buildable':
-      return 'rgba(76, 175, 80, 0.12)';
+      return 'rgba(76, 175, 80, 0.05)';
     default:
-      return 'rgba(46, 52, 64, 0.35)';
+      return 'rgba(46, 52, 64, 0.12)';
   }
 }
 
@@ -24,8 +41,9 @@ type Props = {
   height: number;
 };
 
-/** Solid fills: path brown, buildable green; blocked only for out-of-grid in tileKindAt. */
 export function TileGridOverlay({ width, height }: Props) {
+  const tiles = useMapLayoutStore((s) => s.tiles);
+
   if (width < 8 || height < 8) return null;
 
   const cw = width / TILE_COLS;
@@ -34,7 +52,7 @@ export function TileGridOverlay({ width, height }: Props) {
   const rects: React.ReactNode[] = [];
   for (let r = 0; r < TILE_ROWS; r++) {
     for (let c = 0; c < TILE_COLS; c++) {
-      const kind = TILES[r][c];
+      const kind = tileKindFromTiles(tiles, c, r);
       rects.push(
         <Rect
           key={`t-${r}-${c}`}
@@ -49,15 +67,17 @@ export function TileGridOverlay({ width, height }: Props) {
   }
 
   const gridLines: React.ReactNode[] = [];
-  const stroke = 'rgba(28, 33, 40, 0.55)';
-  const sw = 0.5;
-  for (let c = 0; c <= TILE_COLS; c++) {
-    const x = c * cw;
-    gridLines.push(<Line key={`v-${c}`} x1={x} y1={0} x2={x} y2={height} stroke={stroke} strokeWidth={sw} />);
-  }
-  for (let r = 0; r <= TILE_ROWS; r++) {
-    const y = r * ch;
-    gridLines.push(<Line key={`h-${r}`} x1={0} y1={y} x2={width} y2={y} stroke={stroke} strokeWidth={sw} />);
+  if (SHOW_GRID_LINES) {
+    const stroke = GRID_DEBUG_STRONG ? 'rgba(28, 33, 40, 0.55)' : 'rgba(28, 33, 40, 0.2)';
+    const sw = GRID_DEBUG_STRONG ? 0.5 : 0.35;
+    for (let c = 0; c <= TILE_COLS; c++) {
+      const x = c * cw;
+      gridLines.push(<Line key={`v-${c}`} x1={x} y1={0} x2={x} y2={height} stroke={stroke} strokeWidth={sw} />);
+    }
+    for (let r = 0; r <= TILE_ROWS; r++) {
+      const y = r * ch;
+      gridLines.push(<Line key={`h-${r}`} x1={0} y1={y} x2={width} y2={y} stroke={stroke} strokeWidth={sw} />);
+    }
   }
 
   return (

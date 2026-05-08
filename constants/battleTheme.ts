@@ -19,5 +19,5 @@ export const BattleTheme = {
   laneInsetVertical: 10,
   canvasRadius: 16,
 
-  grassPadMinSize: 52,
+  grassPadMinSize: 68,
 } as const;

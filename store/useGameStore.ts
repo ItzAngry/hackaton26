@@ -4,9 +4,9 @@ import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 
 import { HERO_BY_ID } from '@/constants/heroDefinitions';
-import { isBuildable } from '@/constants/mapTileGrid';
 
 import { isRnAsyncStorageLinked } from '@/lib/nativeStorageSupport';
+import { useMapLayoutStore } from '@/store/useMapLayoutStore';
 import { ATTACK_RANGE_PATH, nearestPathProgressFromTile } from '@/lib/tileMap';
 
 function webLocalStorageAdapter(): StateStorage {
@@ -126,12 +126,43 @@ export interface GameUnit {
   placedTile: { c: number; r: number } | null;
   placedPathCover: number | null;
   towerCooldownRemainMs?: number;
+  /**
+   * True after this hero has been on the map at least once (including drag-recruit).
+   * Bench→map placement skips energy when true (recalled / picked up again).
+   */
+  hasBeenDeployedToMap?: boolean;
+  /**
+   * Legacy: recall waiver from older builds; kept for cloud saves.
+   * Prefer `hasBeenDeployedToMap`.
+   */
+  freeNextMapPlacement?: boolean;
+}
+
+/** First bench placement costs energy; redeploying a hero you recalled does not. */
+export function benchPlacementWaivesEnergy(u: GameUnit): boolean {
+  return u.hasBeenDeployedToMap === true || u.freeNextMapPlacement === true;
+}
+
+/** Normalize older saves so redeploy-after-recall stays free across persistence. */
+export function migrateUnitsFromPersist(units: unknown): GameUnit[] {
+  if (!Array.isArray(units)) return [];
+  return units.map((raw) => {
+    const u = raw as GameUnit;
+    if (u.hasBeenDeployedToMap === true) return u;
+    if (u.freeNextMapPlacement === true) return { ...u, hasBeenDeployedToMap: true };
+    if (u.placedTile != null) return { ...u, hasBeenDeployedToMap: true };
+    return u;
+  });
 }
 
 export interface Quest {
   id: string;
   title: string;
   completed: boolean;
+  /** Local file URI from camera proof; omitted on older saves. */
+  proofUri?: string | null;
+  /** Player-authored task; cleared with preset quests on each new morning after a survived evening. */
+  userDefined?: boolean;
 }
 
 export interface Enemy {
@@ -160,6 +191,16 @@ export const EVENING_DEFENSE_DURATION_MS = 20 * 60 * 1000;
 
 const INITIAL_GOLD = 120;
 export const QUEST_GOLD_REWARD = 15;
+
+const INITIAL_ENERGY = 0;
+/** Energy granted per completed daily task (proof photo during preparation). */
+export const QUEST_ENERGY_REWARD = 1;
+/** Max player-added tasks per preparation day (preset quests do not count). */
+export const MAX_USER_DEFINED_QUESTS = 16;
+/** Max characters for a custom task title. */
+export const MAX_QUEST_TITLE_LEN = 120;
+/** Spent when a defender is placed on the map (drag-drop recruit or bench placement). */
+export const PLACE_DEFENDER_ENERGY_COST = 1;
 
 function tileManhattan(a: { c: number; r: number }, b: { c: number; r: number }): number {
   return Math.abs(a.c - b.c) + Math.abs(a.r - b.r);
@@ -267,14 +308,15 @@ function createHeroUnit(heroId: string): GameUnit | null {
     buffs: [],
     placedTile: null,
     placedPathCover: null,
+    hasBeenDeployedToMap: false,
   };
 }
 
 const INITIAL_QUESTS: Quest[] = [
-  { id: 'q1', title: 'Brush your teeth', completed: false },
-  { id: 'q2', title: 'Take a 10-minute walk', completed: false },
-  { id: 'q3', title: 'Drink a glass of water', completed: false },
-  { id: 'q4', title: 'Tidy one surface', completed: false },
+  { id: 'q1', title: 'Brush your teeth', completed: false, proofUri: null },
+  { id: 'q2', title: 'Take a 10-minute walk', completed: false, proofUri: null },
+  { id: 'q3', title: 'Drink a glass of water', completed: false, proofUri: null },
+  { id: 'q4', title: 'Tidy one surface', completed: false, proofUri: null },
 ];
 
 function freshQuests(): Quest[] {
@@ -286,6 +328,7 @@ function fullRunFailState(fortressMaxHp: number) {
     dayPhase: 'morning' as DayPhase,
     dayStreak: 0,
     gold: INITIAL_GOLD,
+    energy: INITIAL_ENERGY,
     units: [] as GameUnit[],
     quests: freshQuests(),
     boostInventory: {} as Record<string, number>,
@@ -310,6 +353,7 @@ function freshSignedOutCore(fortressMaxHp: number) {
 export type GamePersistSlice = Pick<
   GameState,
   | 'gold'
+  | 'energy'
   | 'dayStreak'
   | 'dayPhase'
   | 'eveningEndsAtMs'
@@ -327,6 +371,8 @@ export type GamePersistSlice = Pick<
 
 interface GameState {
   gold: number;
+  /** Earned from daily tasks; spent to place defenders on the map. */
+  energy: number;
   /** Successful evenings survived (shown as streak). */
   dayStreak: number;
   dayPhase: DayPhase;
@@ -358,7 +404,9 @@ interface GameState {
   /** Clear gameplay + onboarding for the next account; call persist.clearStorage() after this. */
   resetForSignedOutUser: () => void;
 
-  completeQuest: (questId: string) => void;
+  completeQuest: (questId: string, proofUri: string) => void;
+  addCustomQuest: (title: string) => void;
+  removeCustomQuest: (questId: string) => void;
   recruitHero: (heroId: string) => boolean;
   recruitHeroAndPlaceAt: (heroId: string, c: number, r: number, pathCover: number) => boolean;
   buyBoost: (boostId: string) => boolean;
@@ -381,6 +429,7 @@ export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
       gold: INITIAL_GOLD,
+      energy: INITIAL_ENERGY,
       dayStreak: 0,
       dayPhase: 'morning',
       eveningEndsAtMs: null,
@@ -415,17 +464,46 @@ export const useGameStore = create<GameState>()(
           cloudSaveHydrated: false,
         })),
 
-      completeQuest: (questId) =>
+      completeQuest: (questId, proofUri) =>
         set((state) => {
+          const uri = proofUri.trim();
+          if (!uri) return state;
           if (state.dayPhase !== 'morning') return state;
           const q = state.quests.find((x) => x.id === questId);
           if (!q || q.completed) return state;
           return {
             quests: state.quests.map((x) =>
-              x.id === questId ? { ...x, completed: true } : x
+              x.id === questId ? { ...x, completed: true, proofUri: uri } : x
             ),
             gold: state.gold + QUEST_GOLD_REWARD,
+            energy: state.energy + QUEST_ENERGY_REWARD,
           };
+        }),
+
+      addCustomQuest: (title) =>
+        set((state) => {
+          if (state.dayPhase !== 'morning') return state;
+          const raw = title.trim();
+          if (!raw) return state;
+          const n = state.quests.filter((q) => q.userDefined === true).length;
+          if (n >= MAX_USER_DEFINED_QUESTS) return state;
+          const clipped = raw.slice(0, MAX_QUEST_TITLE_LEN);
+          const quest: Quest = {
+            id: `u-${makeId()}`,
+            title: clipped,
+            completed: false,
+            proofUri: null,
+            userDefined: true,
+          };
+          return { quests: [...state.quests, quest] };
+        }),
+
+      removeCustomQuest: (questId) =>
+        set((state) => {
+          if (state.dayPhase !== 'morning') return state;
+          const q = state.quests.find((x) => x.id === questId);
+          if (!q || q.userDefined !== true) return state;
+          return { quests: state.quests.filter((x) => x.id !== questId) };
         }),
 
       recruitHero: (heroId) => {
@@ -437,7 +515,8 @@ export const useGameStore = create<GameState>()(
 
       recruitHeroAndPlaceAt: (heroId, c, r, pathCover) => {
         const state = get();
-        if (!isBuildable(c, r)) return false;
+        if (state.energy < PLACE_DEFENDER_ENERGY_COST) return false;
+        if (!useMapLayoutStore.getState().isBuildableTile(c, r)) return false;
 
         const cover = Math.max(0, Math.min(1, pathCover));
 
@@ -449,7 +528,11 @@ export const useGameStore = create<GameState>()(
         const unit = createHeroUnit(heroId);
         if (!unit) return false;
         set({
-          units: [...state.units, { ...unit, placedTile: { c, r }, placedPathCover: cover }],
+          units: [
+            ...state.units,
+            { ...unit, placedTile: { c, r }, placedPathCover: cover, hasBeenDeployedToMap: true },
+          ],
+          energy: state.energy - PLACE_DEFENDER_ENERGY_COST,
         });
         return true;
       },
@@ -501,7 +584,13 @@ export const useGameStore = create<GameState>()(
       placeUnit: (unitId, c, r, pathCover) => {
         const state = get();
         const unit = state.units.find((u) => u.id === unitId);
-        if (!unit || unit.placedPathCover !== null) return false;
+        if (!unit) return false;
+        /** Must use loose null checks — persisted units may omit fields (undefined). */
+        const onBench = unit.placedTile == null && unit.placedPathCover == null;
+        if (!onBench) return false;
+
+        const skipEnergy = benchPlacementWaivesEnergy(unit);
+        if (!skipEnergy && state.energy < PLACE_DEFENDER_ENERGY_COST) return false;
 
         const cover = Math.max(0, Math.min(1, pathCover));
 
@@ -510,9 +599,20 @@ export const useGameStore = create<GameState>()(
           if (tileManhattan(u.placedTile, { c, r }) < MIN_DEFENDER_TILE_SEP) return false;
         }
 
+        const nextEnergy = skipEnergy ? state.energy : state.energy - PLACE_DEFENDER_ENERGY_COST;
+
         set({
+          energy: nextEnergy,
           units: state.units.map((u) =>
-            u.id === unitId ? { ...u, placedTile: { c, r }, placedPathCover: cover } : u
+            u.id === unitId
+              ? {
+                  ...u,
+                  placedTile: { c, r },
+                  placedPathCover: cover,
+                  hasBeenDeployedToMap: true,
+                  freeNextMapPlacement: false,
+                }
+              : u
           ),
         });
         return true;
@@ -523,7 +623,7 @@ export const useGameStore = create<GameState>()(
         const unit = state.units.find((u) => u.id === unitId);
         if (!unit || unit.placedTile === null || unit.placedPathCover === null) return false;
         if (unit.placedTile.c === c && unit.placedTile.r === r) return true;
-        if (!isBuildable(c, r)) return false;
+        if (!useMapLayoutStore.getState().isBuildableTile(c, r)) return false;
 
         for (const u of state.units) {
           if (u.id === unitId || !u.placedTile) continue;
@@ -544,7 +644,14 @@ export const useGameStore = create<GameState>()(
         set((state) => ({
           units: state.units.map((u) =>
             u.id === unitId
-              ? { ...u, placedTile: null, placedPathCover: null, towerCooldownRemainMs: undefined }
+              ? {
+                  ...u,
+                  placedTile: null,
+                  placedPathCover: null,
+                  towerCooldownRemainMs: undefined,
+                  hasBeenDeployedToMap: true,
+                  freeNextMapPlacement: true,
+                }
               : u
           ),
         })),
@@ -761,8 +868,19 @@ export const useGameStore = create<GameState>()(
       name: 'hackaton-game-day-v1',
       storage: gamePersistStorage,
       skipHydration: Platform.OS === 'web',
+      merge: (persistedState, currentState) => {
+        const p = persistedState as Partial<GameState> | undefined;
+        const c = currentState as GameState;
+        if (!p) return c;
+        return {
+          ...c,
+          ...p,
+          units: migrateUnitsFromPersist(p.units !== undefined ? p.units : c.units),
+        };
+      },
       partialize: (s) => ({
         gold: s.gold,
+        energy: s.energy,
         dayStreak: s.dayStreak,
         dayPhase: s.dayPhase,
         eveningEndsAtMs: s.eveningEndsAtMs,

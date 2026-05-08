@@ -9,6 +9,8 @@ import { AppText } from '@/components/ui/app-text';
 import { HUDChip } from '@/components/ui/hud-chip';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 
+import { PLACE_DEFENDER_ENERGY_COST } from '@/store/useGameStore';
+
 export type BattleMenuActionsProps = {
   onOpenQuests: () => void;
   onStartDefense: () => void;
@@ -21,9 +23,10 @@ export type BattleMenuActionsProps = {
 
 type Props = {
   gold: number;
+  energy: number;
   phaseTitle: string;
   phaseSub: string;
-  onTipsPress: () => void;
+  onInstructionPress: () => void;
   landscapeCompact?: boolean;
   /** Sidebar beside map (tablet/desktop). */
   variant?: 'rail' | 'overlay';
@@ -34,9 +37,10 @@ type Props = {
 
 export function BattleShopSidebar({
   gold,
+  energy,
   phaseTitle,
   phaseSub,
-  onTipsPress,
+  onInstructionPress,
   landscapeCompact,
   variant = 'rail',
   menu,
@@ -70,28 +74,62 @@ export function BattleShopSidebar({
 
   return (
     <View style={wrapStyles}>
-      <View style={[styles.menuBar, denseUi && styles.menuBarDense]}>
-        <ScrollView
-          horizontal
-          nestedScrollEnabled
-          showsHorizontalScrollIndicator={false}
-          style={styles.menuBarScroll}
-          contentContainerStyle={styles.menuBarScrollContent}>
-          <HUDChip icon="🪙" label="Gold" value={gold} dense={denseUi} />
-        </ScrollView>
-        {menu ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={menuOpen ? 'Close battle menu' : 'Open battle menu'}
-            hitSlop={14}
-            style={[styles.menuTrigger, overlay && styles.menuTriggerOverlay]}
-            onPress={() => setMenuOpen((o) => !o)}>
-            <AppText variant="headline" style={styles.menuTriggerGlyph}>
-              ⋯
-            </AppText>
-          </Pressable>
-        ) : null}
-      </View>
+      {overlay ? (
+        <View style={styles.menuBarOverlay}>
+          <View style={styles.menuOverlayChipColumn}>
+            <HUDChip
+              icon="🪙"
+              label="Gold"
+              value={gold}
+              dense={denseUi}
+              style={styles.overlayHudChip}
+            />
+            <HUDChip
+              icon="⚡"
+              label="Energy"
+              value={energy}
+              dense={denseUi}
+              style={styles.overlayHudChip}
+            />
+          </View>
+          {menu ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={menuOpen ? 'Close battle menu' : 'Open battle menu'}
+              hitSlop={14}
+              style={[styles.menuTrigger, styles.menuTriggerOverlayRail]}
+              onPress={() => setMenuOpen((o) => !o)}>
+              <AppText variant="headline" style={styles.menuTriggerGlyph}>
+                ⋯
+              </AppText>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : (
+        <View style={[styles.menuBar, denseUi && styles.menuBarDense]}>
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            style={styles.menuBarScroll}
+            contentContainerStyle={styles.menuBarScrollContent}>
+            <HUDChip icon="🪙" label="Gold" value={gold} dense={denseUi} />
+            <HUDChip icon="⚡" label="Energy" value={energy} dense={denseUi} />
+          </ScrollView>
+          {menu ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={menuOpen ? 'Close battle menu' : 'Open battle menu'}
+              hitSlop={14}
+              style={styles.menuTrigger}
+              onPress={() => setMenuOpen((o) => !o)}>
+              <AppText variant="headline" style={styles.menuTriggerGlyph}>
+                ⋯
+              </AppText>
+            </Pressable>
+          ) : null}
+        </View>
+      )}
 
       {menuOpen && menu ? (
         <View style={[styles.menuSheet, overlay && styles.menuSheetOverlay]}>
@@ -165,8 +203,8 @@ export function BattleShopSidebar({
         nestedScrollEnabled>
         {!denseUi ? (
           <AppText variant="footnote" color="secondary" style={styles.intro}>
-            Long-press a hero, drag to a green tile on the map. They join only when you drop on a valid tile — cancel or
-            miss and nothing is added.
+            Hold, drag to a green tile. {PLACE_DEFENDER_ENERGY_COST} energy to place (Today&apos;s plan). Valid drop
+            only.
           </AppText>
         ) : (
           <AppText variant="caption1" color="secondary" style={styles.introDense} numberOfLines={overlay ? 4 : 3}>
@@ -178,9 +216,9 @@ export function BattleShopSidebar({
         <ShopHeroGrid compact={denseUi} heroDragPlacement={heroDragPlacement} />
       </ScrollView>
 
-      <Pressable accessibilityRole="button" accessibilityLabel="Open tips" hitSlop={10} onPress={onTipsPress}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open instruction" hitSlop={10} onPress={onInstructionPress}>
         <AppText variant="caption1" color="tint">
-          Tips
+          Instruction
         </AppText>
       </Pressable>
     </View>
@@ -237,6 +275,22 @@ const styles = StyleSheet.create({
     gap: 6,
     width: '100%',
   },
+  /** Portrait overlay: stack Gold / Energy so chips are readable in a narrow rail. */
+  menuBarOverlay: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    width: '100%',
+  },
+  menuOverlayChipColumn: {
+    flex: 1,
+    minWidth: 0,
+    gap: 5,
+  },
+  overlayHudChip: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
   menuBarDense: {
     gap: 4,
   },
@@ -261,6 +315,13 @@ const styles = StyleSheet.create({
   menuTriggerOverlay: {
     paddingHorizontal: 8,
     paddingVertical: 6,
+  },
+  /** Align ⋯ with top chip when currencies are stacked (overlay rail). */
+  menuTriggerOverlayRail: {
+    flexShrink: 0,
+    paddingHorizontal: 7,
+    paddingVertical: 7,
+    marginTop: 1,
   },
   menuTriggerGlyph: {
     color: IosUi.systemBlue,

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { pullUserSave, subscribeCloudPush } from '@/lib/gameCloudSync';
+import { fetchSharedMapLayout, pullUserSave, subscribeCloudPush } from '@/lib/gameCloudSync';
 import { useGameStore } from '@/store/useGameStore';
 
 export function GameCloudBootstrap({ userId }: { userId: string }) {
@@ -11,8 +11,10 @@ export function GameCloudBootstrap({ userId }: { userId: string }) {
       useGameStore.setState({ cloudSaveHydrated: false });
       await pullUserSave(userId);
       if (cancelled) return;
+      await fetchSharedMapLayout();
+      if (cancelled) return;
       useGameStore.setState({ cloudSaveHydrated: true });
-      unsub = subscribeCloudPush(userId);
+      unsub = subscribeCloudPush();
     })();
     return () => {
       cancelled = true;

@@ -4,8 +4,13 @@ import { Platform } from 'react-native';
 
 import { isRnAsyncStorageLinked } from '@/lib/nativeStorageSupport';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+export const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
+export const supabaseAnonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
+
+/** False when env was not inlined (empty .env, or Expo not restarted after editing env). */
+export function isSupabaseConfigured(): boolean {
+  return supabaseUrl.length > 0 && supabaseAnonKey.length > 0;
+}
 
 const webAuthStorage = {
   getItem: (key: string) => {

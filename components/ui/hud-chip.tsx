@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { IosRadius, IosUi } from '@/constants/iosUi';
 
@@ -10,11 +10,12 @@ type Props = {
   label: string;
   value: string | number;
   dense?: boolean;
+  style?: ViewStyle;
 };
 
-export function HUDChip({ icon, label, value, dense }: Props) {
+export function HUDChip({ icon, label, value, dense, style }: Props) {
   return (
-    <View style={[styles.wrap, dense && styles.wrapDense]}>
+    <View style={[styles.wrap, dense && styles.wrapDense, style]}>
       {icon ? (
         <AppText variant="caption1" style={[styles.icon, dense && styles.iconDense]}>
           {icon}
