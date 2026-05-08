@@ -11,7 +11,7 @@ type Props = {
 };
 
 const STEPS = 26;
-const DOT = 11;
+const DOT = 15;
 
 export function AttackRangeOverlay({ mapPlay, pathCover, visible }: Props) {
   if (!visible || mapPlay.viewW < 8 || mapPlay.viewH < 8) return null;
@@ -47,8 +47,14 @@ const styles = StyleSheet.create({
     width: DOT,
     height: DOT,
     borderRadius: DOT / 2,
-    backgroundColor: 'rgba(0, 122, 255, 0.38)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: '#FFFFFF',
+    opacity: 0.8,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.25)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 6,
   },
 });

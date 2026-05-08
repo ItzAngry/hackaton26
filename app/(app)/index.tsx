@@ -26,6 +26,7 @@ import { tileCenterLayoutPx, tryTilePlacementTap } from '@/lib/tileMap';
 import { useOnboardingGate } from '@/lib/useOnboardingGate';
 
 import { AttackRangeOverlay } from '@/components/attack-range-overlay';
+import { EnemySpawnIndicator } from '@/components/enemy-spawn-indicator';
 import { BattleShopSidebar } from '@/components/battle-shop-sidebar';
 import { BattlefieldMapBackground } from '@/components/battlefield-map-background';
 import { BattlefieldPathTrackOverlay } from '@/components/battlefield-path-track-overlay';
@@ -292,6 +293,7 @@ function BattleScreenInner() {
                         {statsOverlayVisible && pathCoverForRange !== undefined ? (
                           <AttackRangeOverlay mapPlay={mapPlay} pathCover={pathCoverForRange} visible />
                         ) : null}
+                        <EnemySpawnIndicator mapPlay={mapPlay} />
                         <BattlefieldRoadMap enemies={enemies} mapPlay={mapPlay} />
                         {selectedPlaceId ? (
                           <>

@@ -18,16 +18,30 @@
       "requireFullScreen": false
     },
     "android": {
+      "package": "com.yourname.enchantedbastion",
+      "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
+      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#E8DECF"
-      },
-      "package": "com.yourname.enchantedbastion"
+      }
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24,
+            "enableProguardInReleaseBuilds": false
+          }
+        }
+      ],
       "expo-router",
       [
         "expo-image-picker",
